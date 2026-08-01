@@ -42,6 +42,20 @@ export async function clearAllData(): Promise<void> {
   return invoke("clear_all_data");
 }
 
+export async function pinCurrentAnswer(): Promise<void> {
+  return invoke("pin_current_answer");
+}
+
+/** 手动/重新生成最近检测到的问题（Maybe 级别问题由用户点击生成）。 */
+export async function generateAnswer(): Promise<void> {
+  return invoke("generate_answer");
+}
+
+/** 取消当前答案生成（保留已收到的内容，标记为 cancelled）。 */
+export async function cancelCurrentAnswer(): Promise<void> {
+  return invoke("cancel_current_answer");
+}
+
 /** 订阅后端事件，返回取消订阅函数；非 Tauri 环境返回空操作。 */
 export function onEvent<K extends keyof EventPayloads>(
   event: K,

@@ -35,7 +35,7 @@
 | zip-rs/zip2（crate 名 `zip`） + tafia/quick-xml | DOCX 解析 | https://github.com/zip-rs/zip2 | MIT | zip 8.6.0 / quick-xml 0.41.0 | 解压 DOCX、读取 word/document.xml（`profile/extractor.rs`） | 只读 word/document.xml；不访问文档内 URL 或外部资源；限制条目数与解压大小 | zip, quick-xml | 已引入（Task 6） |
 | facebook/react | UI 库 | https://github.com/facebook/react | MIT | react 19.2.8 / react-dom 19.2.8 | 状态组件、hooks、事件 | 未修改 | react, react-dom | 已引入 |
 | shadcn-ui/ui | UI 组件 | https://github.com/shadcn-ui/ui | MIT | 未引入（Task 2） | 状态组件、表单、按钮、无障碍交互 | 按项目主题重写布局，不复制第三方品牌视觉 | - | 待引入（Task 2） |
-| lucide-icons/lucide | 图标库 | https://github.com/lucide-icons/lucide | ISC | 未引入（Task 2） | 状态与操作图标 | 未修改 | - | 待引入（Task 2） |
+| lucide-icons/lucide | 图标库 | https://github.com/lucide-icons/lucide | ISC | lucide-react 1.28.0 | 状态与操作图标（AnswerCard 工具栏） | 未修改 | lucide-react | 已引入（Task 9） |
 | microsoft/TypeScript | TypeScript 编译器 | https://github.com/microsoft/TypeScript | Apache-2.0 | 7.0.2 | 类型检查 | 未修改，开发依赖 | typescript | 已引入 |
 | DefinitelyTyped | React 类型声明 | https://github.com/DefinitelyTyped/DefinitelyTyped | MIT | @types/react / @types/react-dom（跟随 npm 解析版本，见 package-lock.json） | React/ReactDOM 类型定义 | 未修改，开发依赖 | @types/react, @types/react-dom | 已引入 |
 | vitejs/vite | 构建工具 | https://github.com/vitejs/vite | MIT | vite 8.2.0 / @vitejs/plugin-react 6.0.5 | dev server、生产构建 | 未修改，开发依赖 | vite, @vitejs/plugin-react | 已引入 |

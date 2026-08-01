@@ -1,6 +1,8 @@
 use serde::Serialize;
 use std::sync::Mutex;
 
+use crate::session::SessionControl;
+
 /// 会话状态机：只允许 `Idle -> Starting -> Capturing -> Stopping -> Idle`；
 /// 失败状态（`Failed`）可以 `stop` 回到 `Idle`。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -24,15 +26,39 @@ pub enum SessionError {
     InvalidTransition { from: SessionState, to: &'static str },
 }
 
+/// 运行中会话的句柄：控制信号 + 后台任务。
+#[derive(Clone)]
+pub struct SessionHandle {
+    pub ctl: SessionControl,
+    pub task: tokio::task::AbortHandle,
+}
+
 pub struct SessionManager {
     state: Mutex<SessionState>,
+    handle: Mutex<Option<SessionHandle>>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
             state: Mutex::new(SessionState::Idle),
+            handle: Mutex::new(None),
         }
+    }
+
+    /// 附加运行中会话的句柄（start_session 编排成功后）。
+    pub fn attach(&self, handle: SessionHandle) {
+        *self.handle.lock().expect("handle lock poisoned") = Some(handle);
+    }
+
+    /// 取走会话句柄（stop_session 时）。
+    pub fn take_handle(&self) -> Option<SessionHandle> {
+        self.handle.lock().expect("handle lock poisoned").take()
+    }
+
+    /// 当前会话句柄的克隆（pin/generate 命令用）。
+    pub fn handle(&self) -> Option<SessionHandle> {
+        self.handle.lock().expect("handle lock poisoned").clone()
     }
 
     pub fn state(&self) -> SessionState {

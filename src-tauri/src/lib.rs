@@ -1,12 +1,16 @@
 pub mod answer;
 pub mod asr;
 pub mod audio;
+pub mod pipeline;
 pub mod profile;
 pub mod question;
 mod commands;
+pub mod session;
 mod state;
 pub mod storage;
 pub mod vad;
+
+use std::sync::Arc;
 
 pub use commands::AppState;
 
@@ -20,11 +24,14 @@ pub fn run() {
     };
     tauri::Builder::default()
         .manage(app_state)
-        .manage(state::SessionManager::new())
+        .manage(Arc::new(state::SessionManager::new()))
         .invoke_handler(tauri::generate_handler![
             commands::start_session,
             commands::stop_session,
             commands::session_state,
+            commands::pin_current_answer,
+            commands::generate_answer,
+            commands::cancel_current_answer,
             commands::get_settings,
             commands::save_settings,
             commands::test_provider_connection,

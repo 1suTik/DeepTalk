@@ -34,6 +34,8 @@ export interface DetectedQuestion {
   normalizedText: string;
   confidence: number;
   detectedAtMs: number;
+  /** auto：自动触发生成；maybe：0.40-0.64 置信度，由用户点击生成。 */
+  level: "auto" | "maybe";
 }
 
 export interface AnswerDraft {

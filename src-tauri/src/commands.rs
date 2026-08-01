@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -9,7 +11,9 @@ use crate::answer::{
 use crate::answer::{
     compatible::CompatibleProvider, deepseek::DeepSeekProvider, openai::OpenAiProvider,
 };
-use crate::state::{SessionManager, SessionState};
+use crate::pipeline::RealPipeline;
+use crate::session::{EventSink, Orchestrator, PipelineSource, TauriSink};
+use crate::state::{SessionHandle, SessionManager, SessionState};
 use crate::storage::{credential_account, CredentialStore, Db, Retention};
 
 // ---------------------------------------------------------------------------
@@ -39,24 +43,111 @@ fn app_data_dir() -> Result<PathBuf, String> {
 }
 
 // ---------------------------------------------------------------------------
-// 会话命令（Task 2 骨架）
+// 会话命令（Task 9：完整流水线编排）
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn start_session(manager: State<'_, SessionManager>) -> Result<SessionState, String> {
+pub async fn start_session(
+    app: tauri::AppHandle,
+    manager: State<'_, Arc<SessionManager>>,
+    state: State<'_, AppState>,
+) -> Result<SessionState, String> {
+    if manager.state() != SessionState::Idle {
+        return Err("会话已在运行".into());
+    }
+    let settings = AppSettings::load(&state.db, &state.credentials);
+    // 依次检查：模型、provider 配置；任一步失败都直接返回，不启动任何资源。
+    RealPipeline::find_model()?;
+    let api_key = state
+        .credentials
+        .get(&credential_account(&settings.provider_kind))
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if settings.provider_kind != "custom" && api_key.trim().is_empty() {
+        return Err("请先在设置页配置 API Key".into());
+    }
+    let provider = provider_from_settings(&settings, Some(&api_key)).map_err(|e| e.to_string())?;
+    let pipeline: Arc<dyn PipelineSource> = Arc::new(RealPipeline::new(settings.microphone_enabled));
+    let started_at_ms = crate::storage::retention::now_ms();
+    let meeting_id = format!("meeting-{started_at_ms}");
     manager.start().map_err(|e| format!("{e}"))?;
+    state.db.create_meeting(&meeting_id, started_at_ms).map_err(|e| e.to_string())?;
+    let sink: Arc<dyn EventSink> = Arc::new(TauriSink::new(app.clone()));
+    let (orch, ctl) = Orchestrator::new(
+        pipeline,
+        provider,
+        state.db.clone(),
+        sink,
+        meeting_id,
+    );
+    orch.load_enabled_profiles();
+    let manager2 = manager.inner().clone();
+    let task = tokio::spawn(async move {
+        if let Err(e) = orch.run().await {
+            tracing::error!("会话编排失败：{e}");
+            let _ = manager2.fail(e);
+        }
+    });
+    manager.attach(SessionHandle {
+        ctl: ctl.clone(),
+        task: task.abort_handle(),
+    });
     Ok(manager.state())
 }
 
 #[tauri::command]
-pub fn stop_session(manager: State<'_, SessionManager>) -> Result<SessionState, String> {
+pub async fn stop_session(
+    manager: State<'_, Arc<SessionManager>>,
+) -> Result<SessionState, String> {
+    let Some(handle) = manager.take_handle() else {
+        let _ = manager.stop();
+        return Ok(manager.state());
+    };
+    handle.ctl.stop();
+    // 等待编排任务结束（最多 2 秒），超时则强制中止
+    let task = handle.task;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while !task.is_finished() && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    if !task.is_finished() {
+        task.abort();
+    }
     manager.stop().map_err(|e| format!("{e}"))?;
     Ok(manager.state())
 }
 
 #[tauri::command]
-pub fn session_state(manager: State<'_, SessionManager>) -> SessionState {
+pub fn session_state(manager: State<'_, Arc<SessionManager>>) -> SessionState {
     manager.state()
+}
+
+#[tauri::command]
+pub async fn pin_current_answer(manager: State<'_, Arc<SessionManager>>) -> Result<(), String> {
+    let Some(handle) = manager.handle() else {
+        return Err("会话未运行".into());
+    };
+    handle.ctl.pin_current().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn generate_answer(manager: State<'_, Arc<SessionManager>>) -> Result<(), String> {
+    let Some(handle) = manager.handle() else {
+        return Err("会话未运行".into());
+    };
+    handle.ctl.generate_last().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_current_answer(manager: State<'_, Arc<SessionManager>>) -> Result<(), String> {
+    let Some(handle) = manager.handle() else {
+        return Err("会话未运行".into());
+    };
+    handle.ctl.cancel_current().await;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
