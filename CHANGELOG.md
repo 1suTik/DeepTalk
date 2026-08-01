@@ -4,6 +4,47 @@
 
 ---
 
+## Task 9：连接完整会话流水线和会议面板交互
+
+**日期：** 2026-08-02
+
+### 交付内容
+
+- `src-tauri/src/session.rs`：**会话编排器**（Orchestrator + EventSink/TauriSink + SessionControl）
+  - 完整事件流：`capture-state -> audio-level -> transcript-pending -> transcript-final -> question-detected -> answer-started -> answer-delta -> answer-completed`
+  - 竞争策略：新问题到来时**取消未固定的旧答案**并生成最新问题；用户固定旧答案后新问题进入**单项等待队列**（固定答案完成后再生成）
+  - 问题检测只消费 system（remote）转写；Maybe 级别（0.40-0.64）问题只提示，由用户点击生成；答案请求携带最近 10 条转写 + 命中的资料片段（最多 3 份启用资料，读取 Task 6 profiles.json）
+  - 停止：取消正在生成的答案 → 关闭流水线 → 结束会议（数据库 end_meeting）→ 发送采集结束事件
+  - 会话控制命令：`pin_current_answer` / `generate_answer`（手动/重新生成）/ `cancel_current_answer`（取消并标记 cancelled）
+- `src-tauri/src/pipeline.rs`：**生产流水线**——WASAPI 采集（系统 + 可选麦克风，独立 channel 不混合）→ Silero VAD 分段 → Whisper 本地转写；说话期间每 800ms 对最近 1.6s 滚动窗口生成临时文本（pending），VAD 片段完成生成最终文本（final）；无模型时 start 直接报错（不启动任何资源）
+- `src-tauri/src/commands.rs`：`start_session` 依次检查模型/provider 配置（失败回滚，不启动资源）→ 编排任务 + SessionHandle；`stop_session` 2 秒内取消音频/ASR/网络并等待任务结束（超时 abort）；AppState 挂载 SessionManager(Arc)
+- `src-tauri/src/state.rs`：SessionManager 增加运行中会话句柄（SessionControl + AbortHandle）
+- 前端：`MeetingPage.tsx`（开始/停止会话、音量表、转写流、问题与流式答案卡、Maybe 手动生成、固定/取消/重新生成/复制/字体调节）、`AudioMeters.tsx`、`TranscriptFeed.tsx`、`AnswerCard.tsx`（Lucide 图标 + tooltip，要点/追问默认折叠）、`OverlayPage.tsx` 扩展（最新问题 + 流式短答）、App.tsx 主窗口接入 MeetingPage
+- 依赖：lucide-react 1.28.0（已登记 THIRD_PARTY_NOTICES）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `cargo test --manifest-path src-tauri/Cargo.toml session::` | 先 FAIL（blocking_send 在 async 上下文 panic、假时间戳超出检测窗口、脚本队列竞态）→ 修复后 PASS（5/5：完整事件顺序、新问题取消未固定旧答案、固定后排队、停止取消+关闭流水线、Maybe 手动生成） |
+| 全量 `cargo test` | PASS（111 通过 + 2 忽略，无警告） |
+| `npm test -- --run` | PASS（24 通过：MeetingPage 集成 4、组件 11、OverlayPage、settings、profile） |
+| `tsc --noEmit` / `npm run build` | PASS |
+| `scripts/verify-third-party.ps1` | `Third-party manifest OK`（29 项，含 lucide-react 登记） |
+
+### 提交信息
+
+- 分支：`feat/task-9-live-pipeline`
+- commit：`12f1fc1`（功能）
+- 状态：已推送，待确认后合并 `main`
+
+### 说明
+
+- 过程中处理了两类问题：PS 5.1 编码事故（PowerShell 批量替换 .rs 文件导致中文注释乱码，session.rs 已完整重写恢复；已确认后续一律用 edit/write 工具）与编排测试竞态（async 上下文禁用 blocking_send；FakeProvider 改每请求独立脚本队列）
+- 真实设备端到端（麦克风/扬声器/真实会议）验收属于 Task 10 人工验收范围，见 `TASK_STALLS.md`
+
+---
+
 ## Task 8：实现安全设置、SQLite 历史和 7 天保留策略
 
 **日期：** 2026-08-01
