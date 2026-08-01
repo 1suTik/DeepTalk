@@ -42,6 +42,7 @@ windows = { version = "0.62", features = [
 ] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 reqwest = { version = "0.13", features = ["json", "stream", "blocking"] }
+futures-util = "0.3"
 sha2 = "0.10"
 ndarray = "0.17"
 keyring = { version = "4", features = ["windows-native-keyring-store"] }

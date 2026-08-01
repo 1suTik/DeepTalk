@@ -23,6 +23,7 @@
 | tauri-apps/plugins-workspace | Tauri 官方插件 | https://github.com/tauri-apps/plugins-workspace | MIT OR Apache-2.0 | 未引入（Task 2 起按需引入） | dialog、fs、shell、window-state、global-shortcut | 仅启用实际需要的权限并维护 capability 白名单 | - | 待引入（Task 2） |
 | microsoft/windows-rs | Windows 原生 API | https://github.com/microsoft/windows-rs | MIT OR Apache-2.0 | 0.62.2 | WASAPI、默认音频端点、Windows 凭据 API、窗口属性 | 仅启用所需 feature（Win32_Media_Audio、System_Com、Security_Credentials、UI_WindowsAndMessaging 等）；不使用进程注入 API | windows | 已引入 |
 | tokio-rs/tokio | 异步运行时 | https://github.com/tokio-rs/tokio | MIT | 1.53.1 | channel、取消、超时、后台任务 | 未修改；仅启用 rt-multi-thread/macros/sync/time/fs/signal/io-util/net | tokio | 已引入 |
+| rust-lang/futures-rs（crate 名 `futures-util`） | 异步流工具 | https://github.com/rust-lang/futures-rs | MIT OR Apache-2.0 | 0.3.33 | reqwest `bytes_stream` 的 StreamExt（`answer/provider.rs` SSE 解析） | 未修改 | futures-util | 已引入（Task 7） |
 | seanmonstar/reqwest | 模型 API 调用 | https://github.com/seanmonstar/reqwest | MIT OR Apache-2.0 | 0.13.4 | HTTPS、流式响应、超时和代理 | 未修改；默认 rustls TLS；启用 json 与 stream（SSE 流式） | reqwest | 已引入 |
 | rusqlite/rusqlite | 本地数据库 | https://github.com/rusqlite/rusqlite | MIT | 0.40.1 | SQLite 连接、事务和迁移 | 启用 bundled，编译内置 SQLite；不保存 API Key | rusqlite | 已引入 |
 | open-source-cooperative/keyring-rs | 密钥存储 | https://github.com/open-source-cooperative/keyring-rs | MIT OR Apache-2.0 | 4.1.6 | Windows Credential Manager 后端 | 启用 windows-native-keyring-store；数据库只保存 provider 名称和 key 引用 | keyring | 已引入 |
