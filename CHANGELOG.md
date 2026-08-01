@@ -37,7 +37,7 @@
 ### 提交信息
 
 - 分支：`feat/task-4-local-asr`
-- commit：待补充（Step 4）
+- commit：`85225ba feat: add local streaming speech recognition`
 - 状态：已推送，待确认后合并 `main`
 
 ---
