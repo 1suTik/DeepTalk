@@ -168,13 +168,14 @@ export interface AnswerDraft {
 ### 3.1 Git 与 GitHub 策略
 
 - GitHub 仓库默认使用私有仓库；课程提交时再按导师要求添加访问权限或导出源码。
+- **分支策略：每个 Task 在独立的功能分支上开发，确认无误后合并回 `main`。** 每个 Task 开始时从最新 `main` 创建 `feat/task-N-<简短描述>` 分支（如 `feat/task-2-ui-skeleton`）；在分支上完成开发与全部检查后，push 分支到远程，确认后合并回 `main` 并推送。
 - 不按每一个机械 Step 提交。一次 commit 必须对应一个测试通过、可以独立说明的功能切片；通常每个 Task 产生 1-3 个 commit。
 - 失败测试和实现代码完成 red-green 循环后一起提交，`main` 分支上的每一个 commit 都必须能够构建并通过对应测试。
-- 每个 Task 完成并通过该 Task 的全部检查后 push 一次；每个里程碑建立一个可恢复 tag，最终建立 `v0.1.0` tag。
+- 每个 Task 完成并通过该 Task 的全部检查后合并到 `main` 并 push 一次；每个里程碑建立一个可恢复 tag，最终建立 `v0.1.0` tag。
 - 计划中每个 Task 末尾的 commit 命令是最低检查点；Task 内出现多个独立功能切片时允许增加 `test:`、`feat:` 或 `fix:` commit。
-- 不使用 squash 清理课程开发历史，以便导师检查实现过程。
+- 不使用 squash 清理课程开发历史，以便导师检查实现过程；分支合并使用普通 merge（保留分支历史）。
 - `.gitignore` 必须排除 API Key、`.env`、SQLite 数据库、会议录音/转写、模型文件、`target/`、`node_modules/` 和安装包输出。
-- `origin` 配置完成后，每个 Task 的最终 commit 均执行 `git push origin main --follow-tags`；未配置远程仓库时先保留本地 commit，不阻断功能开发。
+- `origin` 配置完成后，每个 Task 的最终 commit 均先 `git push -u origin feat/task-N-xxx`，确认无误后合并回 `main` 并 `git push origin main --follow-tags`；未配置远程仓库时先保留本地 commit，不阻断功能开发。
 
 里程碑 tag 固定为：
 
