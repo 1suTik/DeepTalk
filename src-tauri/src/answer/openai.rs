@@ -24,11 +24,11 @@ impl OpenAiProvider {
 }
 
 impl AnswerProvider for OpenAiProvider {
-    async fn stream_answer(
-        &self,
+    fn stream_answer<'a>(
+        &'a self,
         request: AnswerRequest,
         cancel: CancellationToken,
-    ) -> Result<mpsc::Receiver<AnswerEvent>, AnswerError> {
-        self.client.stream_answer(request, cancel).await
+    ) -> futures_util::future::BoxFuture<'a, Result<mpsc::Receiver<AnswerEvent>, AnswerError>> {
+        Box::pin(async move { self.client.stream_answer(request, cancel).await })
     }
 }
