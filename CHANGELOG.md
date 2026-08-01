@@ -1,0 +1,88 @@
+# 更新日志（Task 交付记录）
+
+本文件记录每个 Task 的交付内容、验证结果、提交信息与构建环境说明。每完成一个 Task 交付后在此追加记录。
+
+---
+
+## Task 2：建立领域类型、Tauri 命令和双窗口 UI 骨架
+
+**日期：** 2026-08-01
+
+### 交付内容
+
+- `src/types/domain.ts`：前后端领域契约（`Speaker`、`PipelineState`、`SessionState`、`CaptureSource`、`TranscriptSegment`、`DetectedQuestion`、`AnswerDraft`）
+- `src/lib/events.ts`：稳定事件契约（capture-state、audio-level、transcript-pending/final、question-detected、answer-started/delta/completed 及载荷类型）
+- `src/lib/tauri.ts`：Tauri invoke/事件监听封装（非 Tauri 环境安全降级）
+- `src/features/meeting/OverlayPage.tsx` + `OverlayPage.test.tsx`：置顶会议面板（标题栏持续显示 AI 与采集状态）
+- `src/components/CaptureIndicator.tsx`：采集状态指示（系统/麦克风/双路/未采集）
+- `src-tauri/src/state.rs`：会话状态机 `SessionState`（Idle→Starting→Capturing→Stopping→Idle，Failed 可回 Idle）+ 7 项单元测试
+- `src-tauri/src/commands.rs`：`start_session` / `stop_session` / `session_state` 命令
+- `src-tauri/src/lib.rs`：注入 `SessionManager` 并注册命令
+- `src-tauri/tauri.conf.json`：新增 `overlay` 窗口（始终置顶、可缩放、最小宽度 360px、默认不透明度 1.0 ≥ 70%）
+- `src-tauri/icons/`：tauri-build 所需的窗口图标（占位图标，Task 11 细化）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `npm test -- --run src/features/meeting/OverlayPage.test.tsx` | PASS（先 red 后 green） |
+| `cargo test --manifest-path src-tauri/Cargo.toml state::tests` | PASS（7/7） |
+| `npm test -- --run`（全量前端） | PASS |
+| `npx tsc --noEmit` | PASS |
+| `npm run build` | PASS |
+| `cargo test`（完整依赖树） | PASS |
+
+### 提交信息
+
+- 分支：`feat/task-2-ui-skeleton`
+- commit：`668863b feat: add visible meeting overlay and session state`
+- 状态：已推送，待确认后合并 `main`
+
+### 构建环境说明（重要）
+
+- 首次完整编译依赖树（tauri + whisper.cpp Vulkan + ONNX Runtime），共 566 个 crate
+- **260 字符路径限制**：项目路径深嵌套导致 MSVC 无法写入中间文件（cl.exe 不支持长路径，即使开启系统 LongPathsEnabled）。解决方案：cargo 构建目录迁移至短路径 `G:\t`（用户环境变量 `CARGO_TARGET_DIR=G:\t`，setx 持久化）
+- 编译所需环境变量：`VULKAN_SDK`（1.4.350.0）、`LIBCLANG_PATH=C:\Program Files\LLVM\bin`（bindgen 需要）、`CMAKE_GENERATOR=Ninja`（whisper.cpp 构建，避免 MSBuild 长路径问题）
+- 必须在 VS 开发者环境（`vcvars64.bat`）下执行 cargo 命令
+- tauri 2.11.5 已移除窗口 opacity API，窗口不透明度为默认 1.0，满足「不得低于 70%」
+
+---
+
+## Task 1：初始化工程、测试框架与第三方登记
+
+**日期：** 2026-08-01
+
+### 交付内容
+
+- `.gitignore`：排除 API Key、`.env`、SQLite、录音/转写、模型文件、`target/`、`node_modules/`、安装包输出
+- `package.json`：React 19.2.8、Vite 8.2.0、Vitest 4.1.10、TypeScript 7.0.2、@tauri-apps/api 2.11.1、@tauri-apps/cli 2.11.4
+- `vite.config.ts`、`tsconfig.json`、`index.html`、`src/main.tsx`、`src/test/setup.ts`
+- `src-tauri/`：Cargo.toml（13 个直接依赖，含 whisper-rs 0.16.0[vulkan]、ort 2.0.0-rc.13、keyring 4.1.6 等）、tauri.conf.json、capabilities/default.json、最小可编译 lib.rs/main.rs、Cargo.lock（566 包）
+- `THIRD_PARTY_NOTICES.md`：26 项第三方登记（URL/许可证/固定版本/复用板块/修改说明），含参考实现 commit `f3dca22`
+- `scripts/verify-third-party.ps1`：校验登记表字段完整性 + 交叉校验 package.json/Cargo.toml 全部直接依赖
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `npm ls --depth=0` | 无 missing 依赖 |
+| `cargo metadata --manifest-path src-tauri/Cargo.toml --no-deps` | PASS（exit 0） |
+| `npm run build` | PASS（exit 0） |
+| `npx tsc --noEmit` | PASS |
+| `powershell -ExecutionPolicy Bypass -File scripts/verify-third-party.ps1` | 输出 `Third-party manifest OK`（26 项） |
+
+### 提交信息
+
+- 分支：`main`
+- commit：`5dfbeec chore: initialize tauri meeting assistant`（Task 1 在分支策略确定前完成，保留在 main）
+
+### 环境安装记录
+
+- Node.js 24.18.1（官方安装；opencode 自带 npm 损坏，无法执行任何命令）
+- Rust 1.97.1 MSVC（rustup）
+- Vulkan SDK 1.4.350.0（whisper-rs vulkan feature 编译期需要头文件）
+- GitHub CLI 2.97.0；远程仓库 https://github.com/1suTik/Interview-Assistant---Deepseek.git（私有，默认分支 main）
+
+### Git 策略变更
+
+- 2026-08-01 起：每个 Task 在独立功能分支 `feat/task-N-描述` 开发，测试通过后 push 分支，确认后合并 `main`（详见 PROJECT_PLAN.md 3.1）
