@@ -1,4 +1,4 @@
-﻿//! SQLite 数据库：迁移、事务与 repository。
+//! SQLite 数据库：迁移、事务与 repository。
 //!
 //! 只保存文本与元数据；API Key 不落库（见 `credentials.rs`）。
 //! 表固定为：meetings / transcript_segments / questions / answers / profile_documents / settings。
