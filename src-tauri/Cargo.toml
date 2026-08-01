@@ -1,0 +1,52 @@
+[package]
+name = "meeting-ai-assistant"
+version = "0.1.0"
+description = "Windows 实时会议 AI 辅助程序：本地语音转写、问题检测与流式建议答案"
+authors = ["1suTik <1721462252@qq.com>"]
+edition = "2021"
+rust-version = "1.88"
+
+[lib]
+name = "meeting_ai_assistant_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = [] }
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+    "fs",
+    "signal",
+    "io-util",
+    "net",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
+    "Win32_System_Com",
+    "Win32_Devices_Enumeration",
+    "Win32_Security_Credentials",
+    "Win32_UI_WindowsAndMessaging",
+] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+reqwest = { version = "0.13", features = ["json", "stream"] }
+keyring = { version = "4", features = ["windows-native-keyring-store"] }
+whisper-rs = { version = "0.16", features = ["vulkan"] }
+ort = { version = "2.0.0-rc.13", features = ["ndarray", "download-binaries", "copy-dylibs", "tracing"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
