@@ -31,7 +31,7 @@
 ### 提交信息
 
 - 分支：`feat/task-6-profile-library`
-- commit：待补充（Step 4）
+- commit：`1c1f2b0`（功能）
 - 状态：已推送，待确认后合并 `main`
 
 ### 说明
