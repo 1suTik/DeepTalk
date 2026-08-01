@@ -15,7 +15,7 @@
 
 | 项目 | 用途 | URL | 许可证 | 固定版本/Commit | 复用板块 | 修改说明 | 依赖匹配 | 状态 |
 |---|---|---|---|---|---|---|---|---|
-| onetruedutchie-windows | Windows 会议程序参考实现 | https://github.com/pawan0305/onetruedutchie-windows | MIT | f3dca22f8ab30a4f0234c9bba51a71b794ec5ea7（2026-05-29） | `src-tauri/src/audio.rs` 的 WASAPI Loopback、`commands.rs` 的会话编排、`src/overlay/` 双窗口思路、音量事件和重连模式 | 仅作参考；Task 3 移植时只复用经审计的必要代码并保留 MIT 署名；不使用 deepgram.rs、明文 keys.json 与 click-through 隐藏浮窗逻辑 | - | 参考实现 |
+| onetruedutchie-windows | Windows 会议程序参考实现 | https://github.com/pawan0305/onetruedutchie-windows | MIT | f3dca22f8ab30a4f0234c9bba51a71b794ec5ea7（2026-05-29） | WASAPI Loopback（`audio.rs`）：默认 render endpoint loopback、默认 capture endpoint、格式检测、音量计算、停止信号；`src/overlay/` 双窗口思路 | Task 3 已移植至 `src-tauri/src/audio/wasapi.rs`（重新组织为 audio 模块并按本项目事件契约输出 `AudioFrame`，保留 MIT 署名）；不使用 deepgram.rs、明文 keys.json 与 click-through 隐藏浮窗逻辑 | - | 参考实现（Task 3 已移植） |
 | whisper.cpp | 本地中英 ASR 推理核心 | https://github.com/ggerganov/whisper.cpp | MIT | 经 whisper-rs-sys 0.15.0 内置固定 revision（见 Cargo.lock） | 模型格式、推理核心、Vulkan/CPU 后端 | 通过 whisper-rs 绑定在独立工作线程运行，不直接修改上游源码；Vulkan 后端编译需 Vulkan SDK | - | 已引入（传递依赖） |
 | whisper-rs | Rust 调用 whisper.cpp | https://codeberg.org/tazz4843/whisper-rs | Unlicense | 0.16.0 | `WhisperContext`、推理参数和 segment 读取 | 启用 `vulkan` feature（编译期需要 Vulkan SDK 1.4.350.0 头文件）；Cargo.lock 锁定 | whisper-rs | 已引入 |
 | silero-vad | 语音活动检测 | https://github.com/snakers4/silero-vad | MIT（模型文件 MIT） | 模型 v5（2024-06-20 发布，silero_vad.onnx） | 30ms 帧 VAD 起止点检测 | Task 4 引入；通过 Rust ort 运行 ONNX；模型文件不提交 Git，保存于 `%LOCALAPPDATA%\MeetingAIAssistant\models\` | - | 待引入（Task 4） |

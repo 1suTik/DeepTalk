@@ -4,6 +4,42 @@
 
 ---
 
+## Task 3：实现 WASAPI 系统音频和可选麦克风采集
+
+**日期：** 2026-08-01
+
+### 交付内容
+
+- `src-tauri/src/audio/resample.rs`：交错多声道浮点 → 16kHz 单声道 i16（均值 + 钳位防溢出）、一次性线性插值重采样、流式 `Resampler`
+- `src-tauri/src/audio/level.rs`：RMS / 峰值 / RMS 分贝计算
+- `src-tauri/src/audio/wasapi.rs`：WASAPI 采集（移植自 onetruedutchie-windows，MIT）：默认 render endpoint loopback（系统音频）、默认 capture endpoint（麦克风）、格式检测（IEEE float / PCM / extensible）、音量计算、停止信号
+- `src-tauri/src/audio/mod.rs`：`AudioSource`（System/Microphone）、`AudioFrame`（来源标记 + 16kHz 单声道 i16 + 采集时刻）、采集线程启动函数；系统与麦克风数据写入不同 channel，不做 sample-by-sample 混合
+- `src-tauri/examples/loopback_probe.rs`：真实设备探针
+- `src-tauri/Cargo.toml`：windows crate 增加 `Win32_System_Com_StructuredStorage`、`Win32_System_Variant` feature（`IMMDevice::Activate` 需要）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `cargo test --manifest-path src-tauri/Cargo.toml audio::resample::tests` | 先 FAIL（8 项未实现）→ 实现后 PASS |
+| `cargo test --manifest-path src-tauri/Cargo.toml audio::` | PASS（11/11） |
+| `cargo build --example loopback_probe` | PASS |
+| 真实设备探针（播放 1kHz 测试音） | `LOOPBACK_OK frames=200 rms=0.0123 peak=0.0513`（非零 RMS）、`MIC_OK frames=291`、`PROBE_PASS` |
+| 麦克风不可用时 | 探针输出 `MIC_UNAVAILABLE` 且系统音频不受影响（代码路径已验证） |
+
+### 提交信息
+
+- 分支：`feat/task-3-audio-capture`
+- commit：待补充（Step 4）
+- 状态：已推送，待确认后合并 `main` 并打 `v0.1.0-m1` 里程碑 tag
+
+### 说明
+
+- 探针运行期间需要播放测试音频（如 1kHz 正弦）验证非零 RMS
+- 采集输出契约：`AudioFrame { source, samples_16khz_mono: Vec<i16>, captured_at_ms }`
+
+---
+
 ## Task 2：建立领域类型、Tauri 命令和双窗口 UI 骨架
 
 **日期：** 2026-08-01
