@@ -1,5 +1,6 @@
 pub mod asr;
 pub mod audio;
+pub mod question;
 mod commands;
 mod state;
 pub mod vad;
@@ -15,4 +16,5 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
 
