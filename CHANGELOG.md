@@ -30,7 +30,7 @@
 ### 提交信息
 
 - 分支：`feat/task-3-audio-capture`
-- commit：待补充（Step 4）
+- commit：`3617634 feat: capture separate system and microphone audio`
 - 状态：已推送，待确认后合并 `main` 并打 `v0.1.0-m1` 里程碑 tag
 
 ### 说明
