@@ -104,8 +104,16 @@ mod tests {
             .map(|i| 1.5 * ((i as f32 * std::f32::consts::TAU * 440.0) / 48_000.0).sin())
             .collect();
         let mono = to_mono_i16(&samples, 1);
-        assert!(mono.iter().all(|&s| s.abs() <= 32_767));
-        assert_eq!(mono.iter().map(|&s| s.abs()).max(), Some(32_767));
+        assert_eq!(
+            mono.iter().map(|&s| s as i32).max(),
+            Some(32_767),
+            "overload must clamp at i16 max"
+        );
+        assert_eq!(
+            mono.iter().map(|&s| s as i32).min(),
+            Some(-32_767),
+            "overload must clamp at -i16 max"
+        );
     }
 
     #[test]

@@ -10,6 +10,7 @@ pub enum SessionState {
     Starting,
     Capturing,
     Stopping,
+    #[allow(dead_code)]
     Failed { message: String },
 }
 
@@ -77,6 +78,7 @@ impl SessionManager {
     }
 
     /// `Starting`/`Capturing` 期间出错进入 `Failed`。
+    #[allow(dead_code)]
     pub fn fail(&self, message: impl Into<String>) -> Result<(), SessionError> {
         let mut state = self.state.lock().expect("state lock poisoned");
         match *state {
