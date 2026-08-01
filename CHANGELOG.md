@@ -4,6 +4,43 @@
 
 ---
 
+## Task 8：实现安全设置、SQLite 历史和 7 天保留策略
+
+**日期：** 2026-08-01
+
+### 交付内容
+
+- `src-tauri/migrations/001_initial.sql`：固定六表 `meetings` / `transcript_segments` / `questions` / `answers` / `profile_documents` / `settings`（外键级联 + 索引）
+- `src-tauri/src/storage/database.rs`：SQLite 迁移（启动自动执行）、事务（批量插入任一条失败整体回滚）、settings 键值存储（upsert）、会议/转写/问题/答案/资料 repository；`Db` 以 `Arc<Mutex<Connection>>` 包装可跨线程共享
+- `src-tauri/src/storage/credentials.rs`：API Key 仅写入 Windows Credential Manager（keyring，service=`MeetingAIAssistant`，account=`api-key:<provider>`），SQLite 只保存引用；**日志不输出 key**
+- `src-tauri/src/storage/retention.rs`：默认 7 天保留（`settings.retention.days` 可配），只删未固定且已结束的会议（单事务 + 级联删除关联数据）；启动立即清理一次 + 每 24 小时后台清理（spawn_blocking）
+- `src-tauri/src/commands.rs`：`AppSettings`（provider/base_url/model/has_api_key/retention/mic/asr_model）get/save；`test_provider_connection`（复用 Task 7 provider，20s 超时，可注入假 provider 测试）；`clear_all_data`（清除会议/转写/问题/答案/资料，保留设置与凭据）；`AppState` 全局状态 + 保留策略后台任务
+- `src/features/settings/SettingsPage.tsx` + 测试：provider 切换自动更新默认 Base URL（DeepSeek/OpenAI/Custom→Ollama `127.0.0.1:11434/v1`）、API Key 输入**永不回显**（type=password + placeholder 提示已保存）、连接测试、保留天数、麦克风开关、清除全部数据（先弹确认对话框）
+- Task 7 遗留修正：`AnswerProvider` trait 从 async fn 改为 `BoxFuture`（支持 `dyn` 对象注入，供连接测试与 Task 9 编排）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `cargo test --manifest-path src-tauri/Cargo.toml storage::` | PASS（13/13：六表迁移、事务回滚、8 天旧记录删除+级联、固定记录保留、自定义保留天数、清除全部、settings 往返、凭据 roundtrip/空值删除/不存在返回 None） |
+| `cargo test --manifest-path src-tauri/Cargo.toml commands::` | PASS（假 provider 首个 delta/失败传播、设置默认值与往返、credential_id 作用域） |
+| 全量 `cargo test` | PASS（105 通过 + 2 忽略，无警告） |
+| `npm test -- --run src/features/settings` | PASS（6/6）；全量 `npm test`（11）`tsc`/`build` PASS |
+| `scripts/verify-third-party.ps1` | 无新依赖，不涉及 |
+
+### 提交信息
+
+- 分支：`feat/task-8-settings-storage`
+- commit：`86039f8`（功能）
+- 状态：已推送，待确认后合并 `main`
+
+### 说明
+
+- 真实 Credential Manager 写入使用本机 keyring 后端（Windows Credential Manager），测试用独立 account 名并在测试后删除
+- 真实 provider 连接测试需用户提供 API Key，见 `TASK_STALLS.md` 条目 1
+
+---
+
 ## Task 7：实现 DeepSeek、OpenAI 和自定义流式答案适配器
 
 **日期：** 2026-08-01
