@@ -19,6 +19,19 @@
         "minWidth": 720,
         "minHeight": 480,
         "center": true
+      },
+      {
+        "label": "overlay",
+        "title": "会议辅助",
+        "width": 420,
+        "height": 560,
+        "minWidth": 360,
+        "minHeight": 240,
+        "resizable": true,
+        "alwaysOnTop": true,
+        "decorations": true,
+        "skipTaskbar": true,
+        "visible": true
       }
     ],
     "security": {
