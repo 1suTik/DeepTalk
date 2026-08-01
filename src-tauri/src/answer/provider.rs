@@ -154,15 +154,17 @@ impl CancellationToken {
 }
 
 /// 可替换的答案 Provider 接口。
-#[allow(async_fn_in_trait)]
 pub trait AnswerProvider: Send + Sync {
     /// 发起流式请求，返回事件接收端；错误通过 `AnswerEvent::Failed` 上报，
     /// 取消后不再发送任何事件（接收端直接关闭）。
-    async fn stream_answer(
-        &self,
+    fn stream_answer<'a>(
+        &'a self,
         request: AnswerRequest,
         cancel: CancellationToken,
-    ) -> Result<mpsc::Receiver<AnswerEvent>, AnswerError>;
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<mpsc::Receiver<AnswerEvent>, AnswerError>,
+    >;
 }
 
 // ---------------------------------------------------------------------------
