@@ -2,10 +2,17 @@
 <#
 .SYNOPSIS
 在本会话中配置 Rust/Tauri 构建所需环境变量（VS 开发者环境 + Vulkan/LLVM/CMake/Ninja + 短路径 target 目录）。
-在 VSCode PowerShell 中执行本脚本后，可直接运行 `npm run tauri dev`。
+
+重要：必须在当前会话中运行，不要使用 `powershell -File`（那会在子进程里设置变量，退出后失效）。
 
 .EXAMPLE
-powershell -ExecutionPolicy Bypass -File scripts/build-env.ps1
+# 方式一（推荐，需先放开执行策略一次）：
+#   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+#   .\scripts\build-env.ps1
+#   cargo test --manifest-path src-tauri/Cargo.toml audio::
+#
+# 方式二（不改执行策略，一次性）：
+#   powershell -ExecutionPolicy Bypass -Command ".\scripts\build-env.ps1; cargo test --manifest-path src-tauri/Cargo.toml audio::"
 #>
 $ErrorActionPreference = "Stop"
 
@@ -45,9 +52,6 @@ if ($ninja) {
 }
 
 Set-Item -Path "Env:CMAKE_GENERATOR" -Value "Ninja"
-if (-not $env:CARGO_TARGET_DIR) {
-    Set-Item -Path "Env:CARGO_TARGET_DIR" -Value "G:\t"
-}
 Set-Item -Path "Env:CARGO_TARGET_DIR" -Value "G:\t"
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
 
