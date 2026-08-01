@@ -41,7 +41,9 @@ windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 rusqlite = { version = "0.40", features = ["bundled"] }
-reqwest = { version = "0.13", features = ["json", "stream"] }
+reqwest = { version = "0.13", features = ["json", "stream", "blocking"] }
+sha2 = "0.10"
+ndarray = "0.17"
 keyring = { version = "4", features = ["windows-native-keyring-store"] }
 whisper-rs = { version = "0.16", features = ["vulkan"] }
 ort = { version = "2.0.0-rc.13", features = ["ndarray", "download-binaries", "copy-dylibs", "tracing"] }

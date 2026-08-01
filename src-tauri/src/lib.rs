@@ -1,6 +1,8 @@
+pub mod asr;
 pub mod audio;
 mod commands;
 mod state;
+pub mod vad;
 
 pub fn run() {
     tauri::Builder::default()

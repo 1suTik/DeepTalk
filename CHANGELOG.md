@@ -4,6 +4,44 @@
 
 ---
 
+## Task 4：实现模型管理、Silero VAD 和本地 Whisper 转写
+
+**日期：** 2026-08-01
+
+### 交付内容
+
+- `src-tauri/models/models.json`：官方模型清单（id、下载 URL、SHA-256、大小、语言范围、运行档位），内嵌于程序
+- `src-tauri/src/asr/model_manager.rs`：清单校验（必需字段）、**本地模型导入**（计算并登记 SHA-256、按大小匹配清单、临时文件 + 原子重命名、失败即删）、本地注册表持久化、`download_with_resume` 断点续传（Range 请求 + 大小校验）
+- `src-tauri/src/vad/segmenter.rs`：VAD 分段状态机（30ms 帧、300ms 前置缓存、180ms 语音起段、600ms 静音收段、25s 强制切分；段不含尾部静音），与分类器解耦
+- `src-tauri/src/vad/silero.rs`：Silero VAD v5 ONNX 分类器（ort 运行，维护 h/c 状态）
+- `src-tauri/src/asr/whisper_worker.rs`：Whisper 转写原语（Vulkan 加载失败自动降级 CPU、`transcribe`/`transcribe_text`、16kHz 单声道 i16 WAV 读取）
+- `tests/fixtures/audio/`：SAPI TTS 生成的中文/英文问题音频与静音测试音频（16kHz 单声道）
+- 依赖：新增 `sha2`、`ndarray`（ort 输入标量）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS（37 通过 + 2 忽略） |
+| asr::model_manager::tests | PASS：错误哈希拒绝、正确哈希通过、导入登记与解析、按大小匹配清单、原子替换失败清理临时文件、断点续传（本地 mock HTTP 服务器）、大小不匹配检测、注册表持久化 |
+| vad::segmenter::tests | PASS：静音不产出、两段语音正确分开（含前置缓存、不含尾部静音）、短噪声不起段、超长语音 25s 切分 |
+| asr::whisper_worker::tests | PASS：缺失模型报错、WAV 读取、pcm→f32 映射 |
+| 模型依赖集成测试（zh/en/silence fixtures 转写） | 标记 `#[ignore]`：**需要用户先本地导入 Whisper 模型**；导入后运行 `cargo test -- --ignored asr::whisper_worker` 验证 |
+
+### 模型来源说明（按用户要求调整）
+
+- v0.1.0 **不做模型自动下载**（HuggingFace 的 whisper.cpp 模型仓库需要登录，GitHub Release 无模型资产）
+- 用户在设置/导入界面选择本地模型文件 → `import_model` 计算并登记 SHA-256，经校验后使用
+- 官方清单（models.json）保留下载元数据与结构，供后续版本启用自动下载
+
+### 提交信息
+
+- 分支：`feat/task-4-local-asr`
+- commit：待补充（Step 4）
+- 状态：已推送，待确认后合并 `main`
+
+---
+
 ## Task 3：实现 WASAPI 系统音频和可选麦克风采集
 
 **日期：** 2026-08-01
