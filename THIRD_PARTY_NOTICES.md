@@ -30,8 +30,8 @@
 | serde-rs/serde | 序列化 | https://github.com/serde-rs/serde | MIT OR Apache-2.0 | serde 1.0.229 / serde_json 1.0.151 | derive、JSON 编解码 | 未修改 | serde, serde_json | 已引入 |
 | dtolnay/thiserror | 错误类型 | https://github.com/dtolnay/thiserror | MIT OR Apache-2.0 | 2.0.19 | derive 错误类型 | 未修改 | thiserror | 已引入 |
 | tokio-rs/tracing | 结构化日志 | https://github.com/tokio-rs/tracing | MIT | 0.1.44 | tracing subscriber、span 计时 | 未修改；日志不得输出 key、完整资料内容或完整答案请求体 | tracing | 已引入 |
-| J-F-Liu/lopdf | PDF 解析 | https://github.com/J-F-Liu/lopdf | MIT | 未引入（Task 6） | PDF 文本对象读取 | 本地提取文字，不上传原文件 | - | 待引入（Task 6） |
-| zip-rs/zip2 + tafia/quick-xml | DOCX 解析 | https://github.com/zip-rs/zip2 | MIT | 未引入（Task 6） | 解压 DOCX、读取 word/document.xml | 本地提取段落和标题，不访问文档内 URL 或外部资源 | - | 待引入（Task 6） |
+| J-F-Liu/lopdf | PDF 解析 | https://github.com/J-F-Liu/lopdf | MIT | 0.44.0 | PDF 文本对象读取（`profile/extractor.rs`） | 本地提取文字，不上传原文件；限制页数与解压大小 | lopdf | 已引入（Task 6） |
+| zip-rs/zip2（crate 名 `zip`） + tafia/quick-xml | DOCX 解析 | https://github.com/zip-rs/zip2 | MIT | zip 8.6.0 / quick-xml 0.41.0 | 解压 DOCX、读取 word/document.xml（`profile/extractor.rs`） | 只读 word/document.xml；不访问文档内 URL 或外部资源；限制条目数与解压大小 | zip, quick-xml | 已引入（Task 6） |
 | facebook/react | UI 库 | https://github.com/facebook/react | MIT | react 19.2.8 / react-dom 19.2.8 | 状态组件、hooks、事件 | 未修改 | react, react-dom | 已引入 |
 | shadcn-ui/ui | UI 组件 | https://github.com/shadcn-ui/ui | MIT | 未引入（Task 2） | 状态组件、表单、按钮、无障碍交互 | 按项目主题重写布局，不复制第三方品牌视觉 | - | 待引入（Task 2） |
 | lucide-icons/lucide | 图标库 | https://github.com/lucide-icons/lucide | ISC | 未引入（Task 2） | 状态与操作图标 | 未修改 | - | 待引入（Task 2） |
@@ -41,6 +41,8 @@
 | vitest-dev/vitest | 测试框架 | https://github.com/vitest-dev/vitest | MIT | vitest 4.1.10 / jsdom 30.0.1 | 单元测试、DOM 环境 | 未修改，开发依赖 | vitest, jsdom | 已引入 |
 | testing-library | React 测试工具 | https://github.com/testing-library/react-testing-library | MIT | @testing-library/react 16.3.2 / @testing-library/jest-dom 7.0.0 | render、DOM 断言 | 未修改，开发依赖 | @testing-library/react, @testing-library/jest-dom | 已引入 |
 | tauri-apps/tauri（npm 侧） | Tauri JS API 与 CLI | https://github.com/tauri-apps/tauri | MIT OR Apache-2.0 | @tauri-apps/api 2.11.1 / @tauri-apps/cli 2.11.4 | invoke、event 监听、构建命令 | 未修改；Rust 侧见上方 tauri 行 | @tauri-apps/api, @tauri-apps/cli | 已引入 |
+| RustCrypto/sha2 | SHA-256 校验 | https://github.com/RustCrypto/hashes | MIT OR Apache-2.0 | 0.10（见 Cargo.lock） | 模型/文档文件哈希校验（`asr/model_manager.rs`） | 未修改 | sha2 | 已引入（Task 4） |
+| rust-ndarray/ndarray | 多维数组 | https://github.com/rust-ndarray/ndarray | MIT OR Apache-2.0 | 0.17（见 Cargo.lock） | ort 输入标量构造（`vad/silero.rs`） | 未修改；与 ort 的 ndarray feature 同版本 | ndarray | 已引入（Task 4） |
 
 ## 模型许可证
 

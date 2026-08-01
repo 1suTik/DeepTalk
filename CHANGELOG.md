@@ -4,6 +4,43 @@
 
 ---
 
+## Task 6：实现资料导入与本地相关片段匹配
+
+**日期：** 2026-08-01
+
+### 交付内容
+
+- `src-tauri/src/profile/extractor.rs`：本地文档解析（PDF via lopdf / DOCX via zip+quick-xml / TXT / Markdown），安全限制：单文件 ≤ 5MB、PDF ≤ 500 页、DOCX 条目 ≤ 200 且解压 ≤ 20MB；**只读 word/document.xml，不访问文档内 URL 或外部资源**；规范化去除控制字符与重复空白
+- `src-tauri/src/profile/importer.rs`：资料导入管理（最多 10 份、同路径去重、启用/移除、原子写本地 JSON 存储，存本机不上传原文件）
+- `src-tauri/src/profile/matcher.rs`：确定性关键词匹配——400-800 字符切块（80 字符重叠，超长段落内部分段）、CJK 单字 + ASCII 词 token、标题加权（1.5×）+ BM25 风格评分；最多 4 个片段、总长 ≤ 6000 字符
+- `src/features/profile/ProfileLibraryPage.tsx` + 测试：资料列表、导入（达上限禁用）、启用/停用、移除
+- `tests/fixtures/documents/`：sample.md / sample.docx（含外部 hyperlink 关系，验证不访问）/ sample.pdf（lopdf 合法生成）
+- 依赖：lopdf 0.44.0、zip 8.6.0、quick-xml 0.41.0
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `cargo test --manifest-path src-tauri/Cargo.toml profile::extractor::tests` | 先 FAIL（20 项未实现）→ 实现后 PASS |
+| 解析安全测试 | PDF/DOCX/TXT/MD 正常解析、空文件拒绝、>5MB 拒绝、损坏 ZIP 拒绝、含外部关系 DOCX 不访问外部 URL 全部 PASS |
+| `cargo test --manifest-path src-tauri/Cargo.toml profile::` | PASS：切块边界与重叠、中英文 token、相关文档优先命中、英文查询、结果数量与总长上限、标题加权、确定性、导入/去重/上限/启停 |
+| `npm test -- --run src/features/profile` | PASS（4/4） |
+| 全量 `cargo test` | PASS（70 通过 + 2 忽略）；`npm test`（5）`tsc`/`build` PASS |
+| `scripts/verify-third-party.ps1` | `Third-party manifest OK`（28 项，含 Task 4 遗留的 sha2/ndarray 补登记） |
+
+### 提交信息
+
+- 分支：`feat/task-6-profile-library`
+- commit：待补充（Step 4）
+- 状态：已推送，待确认后合并 `main`
+
+### 说明
+
+- 匹配测试验证：「音频延迟优化」类问题优先命中包含 WASAPI/VAD/Whisper 的资料片段
+- 资料匹配的会议侧选择（最多 3 份启用）与答案拼装将在 Task 9 会话编排中接入
+
+---
+
 ## Task 5：实现问题检测、去重与上下文窗口
 
 **日期：** 2026-08-01

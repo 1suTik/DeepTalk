@@ -1,5 +1,6 @@
 pub mod asr;
 pub mod audio;
+pub mod profile;
 pub mod question;
 mod commands;
 mod state;
