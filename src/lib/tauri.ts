@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { EventPayloads } from "./events";
-import type { SessionState } from "../types/domain";
+import type { AppSettings, SessionState } from "../types/domain";
 
 /** 非 Tauri 环境（jsdom 单测、纯浏览器）下安全降级。 */
 export function isTauri(): boolean {
@@ -18,6 +18,28 @@ export async function stopSession(): Promise<SessionState> {
 
 export async function getSessionState(): Promise<SessionState> {
   return invoke("session_state");
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  return invoke("get_settings");
+}
+
+export async function saveSettings(
+  settings: AppSettings,
+  apiKey: string | null,
+): Promise<void> {
+  return invoke("save_settings", { settings, apiKey });
+}
+
+export async function testProviderConnection(
+  settings: AppSettings,
+  apiKey: string | null,
+): Promise<string> {
+  return invoke("test_provider_connection", { settings, apiKey });
+}
+
+export async function clearAllData(): Promise<void> {
+  return invoke("clear_all_data");
 }
 
 /** 订阅后端事件，返回取消订阅函数；非 Tauri 环境返回空操作。 */

@@ -43,3 +43,14 @@ export interface AnswerDraft {
   followUps: string[];
   status: "streaming" | "complete" | "cancelled" | "failed";
 }
+
+/** 设置页领域模型（与 Rust AppSettings 对齐，API Key 永不回传）。 */
+export interface AppSettings {
+  providerKind: "deepseek" | "openai" | "custom";
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  retentionDays: number;
+  microphoneEnabled: boolean;
+  asrModelId: string;
+}
