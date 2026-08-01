@@ -34,6 +34,7 @@ transcripts/
 
 # --- AI models (never commit to Git) ---
 models/
+!src-tauri/models/
 *.gguf
 *.bin
 *.onnx
