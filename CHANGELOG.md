@@ -31,7 +31,7 @@
 ### 提交信息
 
 - 分支：`feat/task-6-profile-library`
-- commit：`1c1f2b0`（功能）
+- commit：`bf7cf9c`（功能）、`10969b2`（CHANGELOG 定稿）
 - 状态：已推送，待确认后合并 `main`
 
 ### 说明
