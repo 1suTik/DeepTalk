@@ -34,10 +34,19 @@
 - 用户在设置/导入界面选择本地模型文件 → `import_model` 计算并登记 SHA-256，经校验后使用
 - 官方清单（models.json）保留下载元数据与结构，供后续版本启用自动下载
 
+### 模型验证（2026-08-01，用户导入 ggml-large-v3-turbo-q5_0.bin）
+
+- 实测转写（Vulkan 后端，RTX 3060 Ti）：zh `请介绍一下你负责的项目`、en `What was the hardest problem you solved?`、silence `''`（空）
+- 已用真实 SHA-256 `3942217...a7e2` 回填 models.json 的 large-v3-turbo 条目
+- **修复 1 — 多显卡 Vulkan 崩溃**：机器含虚拟显示适配器，ggml-vulkan 枚举全部设备导致访问违规；worker 默认设 `GGML_VK_VISIBLE_DEVICES=0`（用户显式设置时不覆盖）
+- **修复 2 — 并行 GPU 上下文崩溃**：ggml-vulkan 不允许同进程并行多个 GPU 上下文；WhisperWorker 增加全局互斥锁串行化
+- **修复 3 — 静音幻觉**：whisper 对纯静音输出「Thank you.」；增加 RMS 静音门控（<0.005 直接跳过）+ no_speech_probability ≥0.6 段过滤
+- 模型依赖测试（`#[ignore]`）在导入模型后全部 PASS：`cargo test -- --ignored asr::whisper_worker`
+
 ### 提交信息
 
 - 分支：`feat/task-4-local-asr`
-- commit：`85225ba feat: add local streaming speech recognition`
+- commit：`85225ba`（功能）、`367e1f0`（CHANGELOG）、`待补充`（模型验证修复）
 - 状态：已推送，待确认后合并 `main`
 
 ---

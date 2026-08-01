@@ -8,6 +8,9 @@ use std::path::Path;
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
+/// RMS 低于该值的输入视为纯静音，跳过转写（防幻觉）。
+const SILENCE_RMS_THRESHOLD: f64 = 0.005;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WhisperBackend {
     Vulkan,
@@ -37,11 +40,22 @@ pub struct WhisperWorker {
     pub backend: WhisperBackend,
 }
 
+/// ggml-vulkan 不允许同一进程内多个 GPU 上下文并行使用（会访问违规），
+/// 会话管道本身也是单一消费者，因此全局串行化模型创建与转写。
+static GPU_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 impl WhisperWorker {
     /// 加载模型：优先 Vulkan（GPU），初始化失败自动回退 CPU。
+    ///
+    /// 多显卡机器（如虚拟显示适配器）上 ggml-vulkan 枚举全部设备可能导致崩溃，
+    /// 故默认仅使用设备 0（用户显式设置 `GGML_VK_VISIBLE_DEVICES` 时不覆盖）。
     pub fn new(model_path: &Path) -> Result<Self, WhisperError> {
         if !model_path.is_file() {
             return Err(WhisperError::ModelNotFound(model_path.display().to_string()));
+        }
+        let _guard = GPU_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if std::env::var("GGML_VK_VISIBLE_DEVICES").is_err() {
+            std::env::set_var("GGML_VK_VISIBLE_DEVICES", "0");
         }
         let mut gpu_params = WhisperContextParameters::new();
         gpu_params.use_gpu(true);
@@ -61,11 +75,19 @@ impl WhisperWorker {
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_language(Some("auto"));
         params.set_n_threads(4);
+        // 静音幻觉抑制（whisper.cpp 默认阈值）：低 logprob 且高 no-speech 概率时丢弃文本。
+        params.set_no_speech_thold(0.6);
+        params.set_logprob_thold(-1.0);
         Self { ctx, params, backend }
     }
 
-    /// 转写一段音频，返回按时间排序的文本片段。
+    /// 转写一段音频，返回按时间排序的文本片段（no-speech 段被过滤）。
     pub fn transcribe(&self, pcm: &[i16]) -> Result<Vec<TranscriptSegment>, WhisperError> {
+        // 静音门控：whisper 对纯静音可能产生「Thank you.」式幻觉，RMS 过低的输入直接跳过。
+        if crate::audio::level::rms(pcm) < SILENCE_RMS_THRESHOLD {
+            return Ok(Vec::new());
+        }
+        let _guard = GPU_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let samples: Vec<f32> = pcm.iter().map(|&s| s as f32 / 32768.0).collect();
         let mut state = self
             .ctx
@@ -76,8 +98,16 @@ impl WhisperWorker {
             .map_err(|e| WhisperError::Whisper(e.to_string()))?;
         let mut out = Vec::new();
         for seg in state.as_iter() {
+            let no_speech = seg.no_speech_probability();
+            if no_speech >= 0.6 {
+                continue;
+            }
+            let text = seg.to_str_lossy().unwrap_or_default().into_owned();
+            if text.trim().is_empty() {
+                continue;
+            }
             out.push(TranscriptSegment {
-                text: seg.to_str_lossy().unwrap_or_default().into_owned(),
+                text,
                 start_ms: seg.start_timestamp() / 10,
                 end_ms: seg.end_timestamp() / 10,
             });
