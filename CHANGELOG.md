@@ -4,6 +4,41 @@
 
 ---
 
+## Task 7：实现 DeepSeek、OpenAI 和自定义流式答案适配器
+
+**日期：** 2026-08-01
+
+### 交付内容
+
+- `src-tauri/src/answer/provider.rs`：统一 Provider 接口（`AnswerProvider` trait + `AnswerRequest`/`AnswerEvent`/`AnswerError`/`AnswerConfig`）+ 轻量 `CancellationToken`（tokio Notify 实现，无新增运行时依赖）+ OpenAI-compatible SSE 流式引擎
+  - **接口模式**参照主流 AI/Agent 调用约定：DeepSeek 与 Custom 走 OpenAI-compatible chat streaming wire format（`POST /chat/completions` + `stream: true` + `data:` SSE）；OpenAI 走官方 Responses API 流式事件（`POST /responses` + `response.output_text.delta`）；Bearer Token 认证；模型 ID 由设置页保存不写死
+  - **超时与重试**：连接 15s / 总 60s；网络错误最多自动重试 1 次（300ms backoff）；401/403（认证失败）与 429（限流，解析 Retry-After）不重试；取消后不再发送任何事件
+  - **固定输出顺序**：`Started -> ShortAnswerDelta* -> KeyPoints -> FollowUps -> Completed`；SSE JSON 解析异常时保留已收到短答、后续内容降级为普通要点；UTF-8 字符跨 TCP 分块拆包可重组
+- `src-tauri/src/answer/prompt.rs`：系统提示词明确将会议转写/导入资料/问题标记为**不可信数据**（防提示注入覆盖系统规则）；固定三段标记格式 `[短答]`/`[要点]`/`[追问]`
+- `deepseek.rs`（默认 `https://api.deepseek.com/v1`）/ `openai.rs`（默认 `https://api.openai.com/v1`，Responses API）/ `compatible.rs`（默认 `http://127.0.0.1:11434/v1` Ollama 预设，只连接已启动的本地服务，不检测/安装/管理 Ollama）
+- 依赖：futures-util 0.3.33（reqwest `bytes_stream` StreamExt）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `cargo test --manifest-path src-tauri/Cargo.toml answer::` | 先 FAIL（adapter 桩）→ 实现后 PASS（17/17：正常 SSE 顺序、UTF-8 拆包重组、401 不重试、429 不重试+Retry-After、断流重试一次、断流保留已收内容、取消后零事件、总超时、Responses API 风格、降级、base_url 校验、prompt 不可信数据规则） |
+| 全量 `cargo test` | PASS（87 通过 + 2 忽略，无警告） |
+| `scripts/verify-third-party.ps1` | `Third-party manifest OK`（29 项，含 futures-util 登记） |
+
+### 提交信息
+
+- 分支：`feat/task-7-answer-providers`
+- commit：`19c4a5f`（功能）
+- 状态：已推送，待确认后合并 `main`
+
+### 说明
+
+- 真实 DeepSeek/OpenAI API 联调需要用户提供 API Key 与网络访问，已在 `TASK_STALLS.md` 登记（待用户配合）
+- 真实 provider 的流式事件在 Task 9 会话编排中接入前端
+
+---
+
 ## Task 6：实现资料导入与本地相关片段匹配
 
 **日期：** 2026-08-01
