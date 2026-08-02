@@ -24,7 +24,7 @@
 - 导入 PDF、DOCX、TXT、Markdown 格式的简历、项目经历和岗位说明；资料只在本机解析和检索。
 - 支持 DeepSeek、OpenAI 和自定义 OpenAI 兼容服务；API Key 存入 Windows Credential Manager。
 - 本地保存会议历史，默认 7 天自动删除；用户可固定单场记录或立即清除全部数据。
-- 首次启动由程序下载、校验和管理高质量本地语音模型，并提供轻量 CPU 回退模型；普通用户无需手动配置模型路径。
+- 语音模型由**用户本地导入**（v0.1.0 约定，不做程序自动下载）：设置页提供导入/校验入口，`ModelManager::import_model` 计算并登记 SHA-256；校验失败拒绝导入。提供轻量 CPU 回退模型（Vulkan 初始化失败时自动回退，延迟可能增加）。
 - Whisper 模型不放入安装包，默认保存到 `%LOCALAPPDATA%\MeetingAIAssistant\models\`，不得提交到 Git。
 - 答案生成默认使用 DeepSeek/OpenAI API；高级用户可将 Custom Provider 指向本机 OpenAI-compatible 服务。
 
@@ -100,6 +100,7 @@ meeting-ai-assistant/
 │  ├─ features/dashboard/DashboardPage.tsx
 │  ├─ features/meeting/MeetingPage.tsx
 │  ├─ features/meeting/OverlayPage.tsx
+│  ├─ features/meeting/useSessionEvents.ts
 │  ├─ features/profile/ProfileLibraryPage.tsx
 │  ├─ features/settings/SettingsPage.tsx
 │  ├─ lib/events.ts
@@ -110,10 +111,13 @@ meeting-ai-assistant/
 │  ├─ tauri.conf.json
 │  ├─ capabilities/default.json
 │  ├─ migrations/001_initial.sql
+│  ├─ benches/pipeline_latency.rs（Task 10）
 │  └─ src/
 │     ├─ lib.rs
 │     ├─ commands.rs
 │     ├─ state.rs
+│     ├─ session.rs          （会话编排：事件契约、取消/排队竞争策略、TauriSink）
+│     ├─ pipeline.rs         （生产流水线：WASAPI→VAD→Whisper 拼帧转写）
 │     ├─ audio/{mod.rs,wasapi.rs,resample.rs,level.rs}
 │     ├─ asr/{mod.rs,model_manager.rs,whisper_worker.rs}
 │     ├─ vad/{mod.rs,silero.rs,segmenter.rs}
@@ -123,6 +127,8 @@ meeting-ai-assistant/
 │     └─ storage/{mod.rs,database.rs,credentials.rs,retention.rs}
 ├─ tests/fixtures/audio/
 ├─ tests/fixtures/documents/
+├─ tests/manual/（Task 10）
+├─ docs/（Task 10-11）
 └─ scripts/verify-third-party.ps1
 ```
 
@@ -620,16 +626,27 @@ git tag v0.1.0-m3
 
 ### Task 10：性能基准、故障恢复和真实会议验收
 
+> 说明：本 Task 基于 Task 9 已交付的编排实现（`session.rs` Orchestrator + `pipeline.rs` RealPipeline + 前端对话式 UI/置顶窗）。
+> 先清理 Task 9 期间遗留的临时诊断日志（`[pipeline]`/`[orchestrator]`/`[session]` eprintln），再接入正式时间戳。
+
 **Files:**
+- Modify: `src-tauri/src/session.rs`, `src-tauri/src/pipeline.rs`（清理临时诊断日志，接入正式时间戳与结构化日志）
 - Create: `src-tauri/benches/pipeline_latency.rs`
 - Create: `docs/test-cases.md`, `docs/privacy-and-consent.md`
 - Create: `tests/manual/tencent-meeting-checklist.md`
+- Modify: `src-tauri/src/session.rs`（测试：FakeProvider 支持注入首包延迟）
 
-- [ ] **Step 1：增加端到端时间戳**
+- [ ] **Step 1：清理临时诊断日志并接入端到端时间戳**
 
-记录 `speech_started`、`speech_ended`、`transcript_final`、`question_detected`、`provider_connected` 和 `first_answer_delta`。日志只记录耗时、状态和 ID，不记录敏感正文。
+删除 Task 9 调试期加入的 `eprintln!("[pipeline] ...")`、`[orchestrator]`、`[session]` 等临时代码（含 `last_level_log`、`PROB_LOG` 静态计数、`[diag]` 契约打印），正式计时点改为 `tracing` 事件并只记录耗时、状态与 ID，不记录敏感正文。
+
+计时点：`speech_started`、`speech_ended`、`transcript_final`、`question_detected`、`provider_connected`（收到首个 SSE data）、`first_answer_delta`。每个点携带 `duration_ms` 与关联 ID；`session.rs` 测试继续通过。
 
 - [ ] **Step 2：运行离线性能基准**
+
+`pipeline_latency.rs` 基准按 Task 9 组件拆分：
+- 本地问题检测：`question::detector` 直接基准（无需模型），断言 P95 ≤ 50ms。
+- 端到端转写：读取 `tests/fixtures/audio/zh_question.wav`，经 `vad::segmenter`（FakeVad）+ `asr::whisper_worker` 真实模型转写；**依赖用户本地已导入模型**，模型缺失时基准打印跳过说明（不视为失败）。
 
 ```powershell
 cargo bench --manifest-path src-tauri/Cargo.toml --bench pipeline_latency
@@ -639,35 +656,56 @@ Expected: 在 i7-10700K + RTX 3060 Ti 8GB 上，fixture 的最终转写 P50 不�
 
 - [ ] **Step 3：运行模拟 API 延迟测试**
 
-Mock provider 分别注入 100ms、500ms、1500ms 首包延迟，验证 UI 不冻结、取消立即生效、计时数据正确。网络断开时保留转写，并显示可操作的重试状态。
+扩展 `session.rs` 测试的 FakeProvider：支持注入 100ms / 500ms / 1500ms 首包延迟与中途断流。断言：事件顺序不变、`cancel` 后 200ms 内不再有新事件（取消即时生效）、停止会话 2 秒内任务结束。前端 `MeetingPage.test.tsx` 补一条：流式期间 UI 保持可交互（按钮可用）。
+
+网络断开场景：断流后转写与问题气泡保留（前端不因 `answer-failed` 清空会话），答案卡显示失败状态并可「重新生成」——沿用 Task 9 已实现的 `Failed` 事件与重试按钮，测试覆盖失败状态渲染。
 
 - [ ] **Step 4：执行腾讯会议人工验收**
 
-由导师/测试参与者知情后，逐项验证：扬声器和耳机输出、中文问题、英文问题、中英混说、长问题、对方打断、麦克风开启/关闭、切换默认播放设备、断网恢复、API 401/429、运行 60 分钟和结束后数据清理。
+由导师/测试参与者知情后，按 `tests/manual/tencent-meeting-checklist.md` 逐项验证（清单按已交付 UI 编写）：
+- 采集与状态：主界面「开始会话」→ AI 状态/采集指示/音量表实时变化；停止会话 2 秒内回到待机；置顶小窗口同步显示最新问题与流式短答。
+- 语言场景：中文问题、英文问题、中英混说、长问题（25 秒切分）、对方打断（新问题取消未固定旧答案 / 固定后排队）。
+- 设备与网络：扬声器与耳机输出、麦克风开启/关闭（设置页开关）、切换默认播放设备（重新开始会话）、断网恢复（保留转写，答案卡失败可重试）、API 401/429（认证失败/限流不重试，错误提示跳转设置页）。
+- 稳定性与清理：运行 60 分钟无崩溃；结束后检查 7 天保留策略与「清除全部数据」。
 
 - [ ] **Step 5：提交性能与测试文档**
 
 ```powershell
-git add src-tauri/benches docs tests/manual
+git add src-tauri/benches docs tests/manual src-tauri/src/session.rs src-tauri/src/pipeline.rs
 git commit -m "test: add latency and real meeting acceptance suite"
 ```
 
-### Task 11：Windows 安装包、模型下载体验与交付文档
+### Task 11：Windows 安装包、模型导入体验与交付文档
+
+> 说明：按用户约定 **v0.1.0 不做模型自动下载**——模型由用户本地导入（`asr/model_manager.rs` 的 `import_model` 计算并登记 SHA-256，清单 `src-tauri/models/models.json` 只提供元数据与校验信息）。
+> 本 Task 的"模型体验"指：设置页提供模型导入/校验入口 + 首次启动引导说明，而非程序自动下载。
 
 **Files:**
 - Modify: `src-tauri/tauri.conf.json`
+- Modify: `src-tauri/models/models.json`（补全 silero 模型条目与已导入模型校验记录）
+- Modify: `src/features/settings/SettingsPage.tsx`（新增模型导入/校验入口；现有 ASR 模型下拉改为展示本地已导入模型）
+- Modify: `src-tauri/src/commands.rs`（新增模型导入/列表/校验命令，复用 `asr::model_manager`）
 - Create: `README.md`, `docs/build.md`, `docs/architecture.md`, `docs/troubleshooting.md`
 - Modify: `THIRD_PARTY_NOTICES.md`
 
-- [ ] **Step 1：配置 NSIS 安装包**
+- [ ] **Step 1：配置 NSIS 安装包与模型导入体验**
 
-安装包只包含应用本体，不内置 GB 级模型。首次启动向用户说明模型大小、下载来源和校验结果；下载失败可重试或选择轻量模型。卸载时默认保留用户数据，并提供“同时删除本地数据”的明确选项。
+安装包只包含应用本体，不内置 GB 级模型。卸载时默认保留用户数据，并提供“同时删除本地数据”的明确选项。
 
-模型管理器默认推荐 Vulkan 高质量 Whisper 模型，显卡初始化失败时推荐 CPU 轻量模型。设置页可导入兼容模型文件，但正常安装流程不要求用户自行寻找文件或填写路径。Ollama/LM Studio 不随安装包分发。
+模型导入体验（**不自动下载**）：
+- 首次启动：设置页显示模型状态卡片（未导入 / 已导入 + SHA-256 校验结果），说明模型来源（whisper.cpp 官方 Release）与体积（large-v3-turbo q5_0 ≈ 574MB；silero_vad.onnx ≈ 2.3MB）。
+- 用户通过「导入模型文件」选择本地已下载的 `.bin`/`.onnx` 文件；`ModelManager::import_model` 校验 SHA-256 后原子替换到 `%LOCALAPPDATA%\MeetingAIAssistant\models\` 并登记。
+- 校验失败/文件损坏：明确报错并允许重新选择（沿用 Task 6 教训：损坏的 404 HTML 文件会被 protobuf/哈希校验拦截）。
+- 设置页 ASR 模型下拉只列出已导入模型；Vulkan 初始化失败时自动回退 CPU（Task 4 已实现，文档说明延迟可能增加）。
+- Ollama/LM Studio 不随安装包分发。
 
 - [ ] **Step 2：编写可复现构建文档**
 
 文档列出 Node 22、Rust stable MSVC、Visual Studio Build Tools、Windows SDK、CMake 和测试命令；使用 `package-lock.json` 与 `Cargo.lock` 保证依赖可复现。
+
+`docs/architecture.md` 按已交付模块编写：`audio/`（WASAPI 双路采集）、`vad/`（Silero v6 契约：512 样本帧、input/state/sr）、`asr/`（Vulkan→CPU 回退、静音门控）、`question/`（20s 窗口 + 30s 去重 + 前缀续接抑制）、`profile/`（本地解析与 BM25 匹配）、`answer/`（OpenAI-compatible SSE、超时/重试/取消、三段输出）、`storage/`（SQLite 六表 + Credential Manager + 7 天保留）、`session.rs` 编排（取消/排队竞争策略、事件契约）、前端（对话式 UI、置顶窗、`useSessionEvents`）。
+
+`docs/troubleshooting.md` 收录已知问题与排查：模型文件损坏（校验失败）、silero 模型契约版本差异、WASAPI 默认设备切换、多显卡 Vulkan 设备枚举（`GGML_VK_VISIBLE_DEVICES=0`）、GitHub/网络下载失败、凭据管理器不可用。
 
 - [ ] **Step 3：完成第三方许可证审计**
 
@@ -678,7 +716,9 @@ cargo deny check licenses --manifest-path src-tauri/Cargo.toml
 
 Expected: 没有未登记、许可证不兼容或来源未知的依赖。
 
-- [ ] **Step 4：运行最终质量门禁**
+- [ ] **Step 4：清理历史警告并运行最终质量门禁**
+
+先处理历史遗留：移除不再使用的 `#[allow(dead_code)]`（如 `state.rs` 的 Failed 变体若已使用则删除标注）、未使用的 `now_ms`/辅助项，运行 `cargo fmt` 统一格式；随后执行：
 
 ```powershell
 npm test -- --run
@@ -694,7 +734,7 @@ Expected: 所有测试、静态检查和构建通过；生成 Windows NSIS 安�
 - [ ] **Step 5：提交可交付版本**
 
 ```powershell
-git add README.md docs THIRD_PARTY_NOTICES.md src-tauri/tauri.conf.json package-lock.json src-tauri/Cargo.lock
+git add README.md docs THIRD_PARTY_NOTICES.md src-tauri/tauri.conf.json src-tauri/models package-lock.json src-tauri/Cargo.lock
 git commit -m "docs: prepare audited Windows prototype delivery"
 git tag v0.1.0
 ```
