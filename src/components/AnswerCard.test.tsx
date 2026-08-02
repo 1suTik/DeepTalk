@@ -18,6 +18,7 @@ const answer = (overrides: Partial<AnswerDraft> = {}): AnswerDraft => ({
   keyPoints: ["低延迟采集", "独立声道"],
   followUps: ["如何优化延迟？"],
   status: "complete",
+  createdAtMs: 2000,
   ...overrides,
 });
 

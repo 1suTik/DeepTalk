@@ -44,6 +44,8 @@ export interface AnswerDraft {
   keyPoints: string[];
   followUps: string[];
   status: "streaming" | "complete" | "cancelled" | "failed";
+  /** 答案完成时刻（流式期间为 0，排序用）。 */
+  createdAtMs: number;
 }
 
 /** 设置页领域模型（与 Rust AppSettings 对齐，API Key 永不回传）。 */

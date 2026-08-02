@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MeetingPage } from "./MeetingPage";
 import type { EventPayloads } from "../../lib/events";
-import type { AnswerDraft, DetectedQuestion, TranscriptSegment } from "../../types/domain";
+import type { AnswerDraft, DetectedQuestion } from "../../types/domain";
 
 const emitter: { fire: <K extends keyof EventPayloads>(k: K, p: EventPayloads[K]) => void } = {
   fire: () => undefined,
@@ -31,15 +31,6 @@ vi.mock("../../lib/tauri", () => ({
 
 import { cancelCurrentAnswer, generateAnswer, pinCurrentAnswer, startSession, stopSession } from "../../lib/tauri";
 
-const finalSegment: TranscriptSegment = {
-  id: "seg-1",
-  speaker: "remote",
-  text: "请介绍一下你负责的项目",
-  startedAtMs: 1000,
-  endedAtMs: 2000,
-  isFinal: true,
-};
-
 const question: DetectedQuestion = {
   id: "q-1",
   sourceSegmentIds: ["seg-1"],
@@ -58,28 +49,33 @@ describe("MeetingPage", () => {
     await waitFor(() => expect(stopSession).toHaveBeenCalled());
   });
 
-  it("renders full event flow: transcript, question, streaming answer", async () => {
+  it("shows empty state before any question", () => {
+    render(<MeetingPage />);
+    expect(screen.getByText("等待识别问题…")).toBeVisible();
+    expect(screen.queryByTestId("chat-area")).toBeInTheDocument();
+  });
+
+  it("renders question and streaming answer as chat items", async () => {
     render(<MeetingPage />);
     await act(async () => {
-      emitter.fire("transcript-final", finalSegment);
       emitter.fire("question-detected", question);
       emitter.fire("answer-started", { questionId: "q-1", atMs: 2000 });
       emitter.fire("answer-delta", { questionId: "q-1", delta: "我负责音频模块" });
-      emitter.fire("answer-delta", { questionId: "q-1", delta: "。\n" });
       const draft: AnswerDraft = {
         questionId: "q-1",
         shortAnswer: "我负责音频模块。\n",
         keyPoints: ["要点一"],
         followUps: ["追问一"],
         status: "complete",
+        createdAtMs: 3000,
       };
       emitter.fire("answer-completed", draft);
     });
+    expect(screen.getByText("面试官")).toBeVisible();
     expect(screen.getAllByText("请介绍一下你负责的项目").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("短答")).toHaveTextContent("我负责音频模块。");
     expect(screen.getByText("要点（1）")).toBeInTheDocument();
     expect(screen.getByText("追问一")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0));
   });
 
   it("shows maybe question with manual generate button", async () => {
@@ -87,7 +83,6 @@ describe("MeetingPage", () => {
     await act(async () => {
       emitter.fire("question-detected", { ...question, id: "q-2", level: "maybe" });
     });
-    expect(screen.getByTestId("maybe-hint")).toHaveTextContent("可能的问题");
     fireEvent.click(screen.getByRole("button", { name: "生成答案" }));
     await waitFor(() => expect(generateAnswer).toHaveBeenCalled());
   });

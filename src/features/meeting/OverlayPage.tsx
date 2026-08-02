@@ -21,7 +21,7 @@ export interface OverlayPageProps {
   currentAnswer?: AnswerDraft | null;
 }
 
-/** 始终置顶的会议面板：标题栏持续显示 AI 与采集状态，正文显示最新问题与流式短答。 */
+/** 置顶小窗口：精简对话区——仅最新问题与流式短答。 */
 export function OverlayPage({
   initialState,
   captureSource = initialState === "idle" || initialState === "error"
@@ -38,7 +38,7 @@ export function OverlayPage({
         </span>
         <CaptureIndicator source={captureSource} />
       </header>
-      {currentQuestion && (
+      {currentQuestion ? (
         <div className="overlay__content" data-testid="overlay-content">
           <p className="overlay__question" title={currentQuestion.normalizedText}>
             {currentQuestion.normalizedText}
@@ -53,6 +53,10 @@ export function OverlayPage({
               {currentAnswer.shortAnswer || "正在生成…"}
             </p>
           )}
+        </div>
+      ) : (
+        <div className="overlay__content overlay__content--empty">
+          <p>等待识别问题…</p>
         </div>
       )}
     </div>
