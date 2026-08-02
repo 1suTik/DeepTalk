@@ -4,6 +4,51 @@
 
 ---
 
+## Task 10（Step 1）与 Task 11：最终门禁与交付
+
+**日期：** 2026-08-02
+
+### 交付内容（Task 10 Step 1）
+
+- 清理 Task 9 调试期遗留的临时诊断日志（`[pipeline]`/`[orchestrator]`/`[session]` eprintln、`last_level_log`、VAD 概率统计等）
+- 接入正式端到端时间戳（tracing 事件，只记录耗时/状态/ID）：`speech_started`、`speech_ended`、`transcript_final`（pipeline.rs）、`question_detected`、`provider_connected`、`first_answer_delta`（session.rs）
+
+### 交付内容（Task 11 全部）
+
+- **模型导入体验（不做自动下载）**：`models.json` 补 Silero VAD v6 条目（SHA-256 2623a2…788f 已回填）；设置页新增「语音模型」卡片（清单 + 导入状态 + SHA-256 校验）+「扫描并校验」按钮；`scan_and_import_models` 命令扫描目录按清单匹配导入（Silero 固定落盘 `silero_vad.onnx`）；`ModelManager` 暴露 `registry_mut`/`save_registry`
+- **NSIS 安装包**：`tauri.conf.json` 沿用 nsis target（不内置模型）；Cargo.toml 补 `license = "MIT"`（cargo-deny 要求）
+- **文档**：`README.md`、`docs/build.md`、`docs/architecture.md`（按实际模块：session/pipeline/silero v6 契约/竞争策略/前端 hook）、`docs/troubleshooting.md`（模型损坏 404 教训、silero 契约、Vulkan 设备枚举等）
+- **许可证审计**：`src-tauri/deny.toml`（白名单 + cssparser AND 表达式例外）；cargo-deny 0.20.2 已安装
+- **质量门禁清理**：clippy 全量警告修复（while-let 循环、matches!、incoming().flatten、无意义比较等）+ rustfmt 统一
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS（115 通过 + 3 忽略，无警告） |
+| `cargo clippy --all-targets -D warnings` | PASS（0 警告） |
+| `cargo fmt -- --check` | PASS |
+| `npm test -- --run` | PASS（27 通过） |
+| `npx tsc --noEmit` / `npm run build` | PASS |
+| `scripts/verify-third-party.ps1` | `Third-party manifest OK`（29 项） |
+| `cargo deny check licenses` | `licenses ok` |
+| `npm run tauri build` | PASS（NSIS：`Meeting AI Assistant_0.1.0_x64-setup.exe`，约 10 分钟 release 构建） |
+
+### 提交信息与合并
+
+- Task 10 Step 1：`9b5b5b4`
+- Task 11：`3544daf`（模型导入）、`6fc856d`（文档+审计）、`72ba528`（clippy/fmt）
+- 合并 main：`6bb1da5`（Merge branch 'fix/overlay-live-data-and-prompt'）
+- tags：`v0.1.0-m1`（9aafb34）、`v0.1.0-m2`（dfdaa6f）、`v0.1.0-m3`（6bb1da5）、`v0.1.0`（6bb1da5）
+- 状态：全部已推送 `main` + tags
+
+### 说明
+
+- 模型导入为「扫描目录 + 按清单校验」，不做自动下载（用户约定）；用户需自行从官方来源获取模型文件放入模型目录
+- Task 10 的 Step 2-5（bench、人工验收清单、test-cases/privacy 文档）留待后续（本阶段按用户指示仅完成 Step 1）
+
+---
+
 ## Task 9：连接完整会话流水线和会议面板交互
 
 **日期：** 2026-08-02
