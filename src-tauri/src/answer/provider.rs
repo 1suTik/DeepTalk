@@ -457,9 +457,6 @@ impl SectionAccumulator {
         emitted: &mut bool,
     ) -> Result<(), AnswerError> {
         let trimmed = line.trim();
-        if trimmed.is_empty() {
-            return Ok(());
-        }
         if self.degraded {
             if !matches!(trimmed, MARKER_SHORT_ANSWER | MARKER_KEY_POINTS | MARKER_FOLLOW_UPS) {
                 self.key_points.push(trimmed.to_string());
@@ -475,13 +472,15 @@ impl SectionAccumulator {
             }
             _ => match self.section {
                 Section::ShortAnswer => {
-                    send_content(
-                        tx,
-                        AnswerEvent::ShortAnswerDelta(format!("{trimmed}\n")),
-                        cancel,
-                        emitted,
-                    )
-                    .await?;
+                    // 短答按段落渲染：非空行以空格连接（模型输出行很短，逐行换行会难以阅读），
+                    // 空行才是段落分隔。
+                    let delta = if trimmed.is_empty() {
+                        "\n\n".to_string()
+                    } else {
+                        format!("{trimmed} ")
+                    };
+                    send_content(tx, AnswerEvent::ShortAnswerDelta(delta), cancel, emitted)
+                        .await?;
                 }
                 Section::KeyPoints => self.key_points.push(strip_bullet(trimmed)),
                 Section::FollowUps => self.follow_ups.push(strip_bullet(trimmed)),
@@ -780,7 +779,7 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                AnswerEvent::ShortAnswerDelta("你好，\n".into()),
+                AnswerEvent::ShortAnswerDelta("你好， ".into()),
                 AnswerEvent::KeyPoints(vec!["要点一".into(), "要点二".into()]),
                 AnswerEvent::FollowUps(vec!["追问一".into()]),
             ]
@@ -810,7 +809,7 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                AnswerEvent::ShortAnswerDelta("短答内容\n".into()),
+                AnswerEvent::ShortAnswerDelta("短答内容 ".into()),
                 AnswerEvent::KeyPoints(vec!["普通降级行".into()]),
             ]
         );
@@ -837,10 +836,10 @@ mod tests {
         let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert_eq!(events.first(), Some(&AnswerEvent::Started));
-        assert_eq!(events[1], AnswerEvent::ShortAnswerDelta("你好，\n".into()));
+        assert_eq!(events[1], AnswerEvent::ShortAnswerDelta("你好， ".into()));
         assert_eq!(
             events[2],
-            AnswerEvent::ShortAnswerDelta("我负责音频采集模块。\n".into())
+            AnswerEvent::ShortAnswerDelta("我负责音频采集模块。 ".into())
         );
         assert!(
             events.contains(&AnswerEvent::KeyPoints(vec!["低延迟采集".into(), "独立声道".into()])),
@@ -868,7 +867,7 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
-        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("你好\n".into())), "events: {events:?}");
+        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("你好 ".into())), "events: {events:?}");
         assert_eq!(events.last(), Some(&AnswerEvent::Completed));
     }
 
@@ -920,7 +919,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(deltas, vec!["你好\n".to_string()]);
+        assert_eq!(deltas, vec!["你好 ".to_string()]);
         assert_eq!(events.last(), Some(&AnswerEvent::Completed));
     }
 
@@ -936,7 +935,7 @@ mod tests {
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert_eq!(server.hits.load(Ordering::SeqCst), 1);
         // 已收到内容则按成功结束，保留内容
-        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("部分内容\n".into())));
+        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("部分内容 ".into())));
         assert_eq!(events.last(), Some(&AnswerEvent::Completed));
     }
 
@@ -961,7 +960,7 @@ mod tests {
         assert_eq!(rx.recv().await, Some(AnswerEvent::Started));
         assert_eq!(
             rx.recv().await,
-            Some(AnswerEvent::ShortAnswerDelta("第一段\n".into()))
+            Some(AnswerEvent::ShortAnswerDelta("第一段 ".into()))
         );
         cancel.cancel();
         let rest = collect(&mut rx, Duration::from_millis(800)).await;
@@ -991,8 +990,8 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
-        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("你好\n".into())));
-        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("，这是 Responses API\n".into())));
+        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("你好 ".into())));
+        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("，这是 Responses API ".into())));
         assert!(events.contains(&AnswerEvent::KeyPoints(vec!["要点一".into()])));
         assert_eq!(events.last(), Some(&AnswerEvent::Completed));
     }
