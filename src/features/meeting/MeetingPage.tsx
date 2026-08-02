@@ -2,34 +2,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioMeters } from "../../components/AudioMeters";
 import { CaptureIndicator } from "../../components/CaptureIndicator";
 import { AnswerCard } from "../../components/AnswerCard";
-import { EVENTS } from "../../lib/events";
+import { useSessionEvents } from "./useSessionEvents";
 import {
   cancelCurrentAnswer,
   generateAnswer,
-  getSessionState,
-  onEvent,
-  pinCurrentAnswer,
   startSession,
   stopSession,
 } from "../../lib/tauri";
+import { pinCurrentAnswer } from "../../lib/tauri";
 import type {
   AnswerDraft,
   CaptureSource,
   DetectedQuestion,
   PipelineState,
-  SessionState,
 } from "../../types/domain";
 
 type ChatItem =
   | { kind: "question"; item: DetectedQuestion }
   | { kind: "answer"; item: AnswerDraft };
 
-interface Meters {
-  system?: { rms: number; peak: number };
-  microphone?: { rms: number; peak: number };
-}
-
-function toPipelineState(session: SessionState | null): PipelineState {
+function toPipelineState(session: ReturnType<typeof useSessionEvents>["sessionState"]): PipelineState {
   if (!session) return "idle";
   if (session === "capturing") return "capturing";
   if (typeof session === "object" && "failed" in session) return "error";
@@ -42,61 +34,12 @@ function itemTime(item: ChatItem): number {
 
 /** 主会议页：对话式界面——仅展示识别到的问题与流式答案（不展示每一条转写）。 */
 export function MeetingPage() {
-  const [sessionState, setSessionState] = useState<SessionState | null>(null);
-  const [questions, setQuestions] = useState<DetectedQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, AnswerDraft>>({});
-  const [meters, setMeters] = useState<Meters>({});
+  const { sessionState, setSessionState, questions, answers, meters, currentAnswer } =
+    useSessionEvents();
   const [fontScale, setFontScale] = useState(1);
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<number | undefined>(undefined);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    void getSessionState().then(setSessionState);
-    const unsubs = [
-      onEvent(EVENTS.captureState, (p) => {
-        if (!p.active) {
-          setSessionState("idle");
-        }
-      }),
-      onEvent(EVENTS.audioLevel, (p) => {
-        setMeters((m) => ({
-          ...m,
-          [p.source]: { rms: p.rms, peak: p.peak },
-        }));
-      }),
-      onEvent(EVENTS.questionDetected, (q) => {
-        setQuestions((list) => [...list, q]);
-      }),
-      onEvent(EVENTS.answerStarted, (p) => {
-        setAnswers((map) => ({
-          ...map,
-          [p.questionId]: {
-            questionId: p.questionId,
-            shortAnswer: "",
-            keyPoints: [],
-            followUps: [],
-            status: "streaming",
-            createdAtMs: p.atMs,
-          },
-        }));
-      }),
-      onEvent(EVENTS.answerDelta, (p) => {
-        setAnswers((map) => {
-          const prev = map[p.questionId];
-          if (!prev) return map;
-          return {
-            ...map,
-            [p.questionId]: { ...prev, shortAnswer: prev.shortAnswer + p.delta },
-          };
-        });
-      }),
-      onEvent(EVENTS.answerCompleted, (draft) => {
-        setAnswers((map) => ({ ...map, [draft.questionId]: draft }));
-      }),
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, []);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -111,18 +54,13 @@ export function MeetingPage() {
     return items;
   }, [questions, answers]);
 
-  const currentQuestion = questions.length > 0 ? questions[questions.length - 1] : null;
-  const currentAnswer = currentQuestion ? answers[currentQuestion.id] : undefined;
-
   const handleStart = useCallback(async () => {
-    const s = await startSession();
-    setSessionState(s);
-  }, []);
+    setSessionState(await startSession());
+  }, [setSessionState]);
 
   const handleStop = useCallback(async () => {
-    const s = await stopSession();
-    setSessionState(s);
-  }, []);
+    setSessionState(await stopSession());
+  }, [setSessionState]);
 
   const handleCopy = useCallback(async () => {
     const text = currentAnswer?.shortAnswer ?? "";
