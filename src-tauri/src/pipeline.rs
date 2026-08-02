@@ -19,8 +19,12 @@ use crate::vad::silero::SileroVad;
 
 // Silero v6 ONNX 要求输入精确 512 样本（32ms @16kHz）。
 const FRAME_SAMPLES: usize = 512;
-/// 转写前段首前置静音（200ms @16kHz）：提升 whisper 开头词识别率。
+/// 转写时段首前置静音（200ms @16kHz）：whisper 对直接从语音开始的音频易吞掉
+/// 开头第一个词，前置静音上下文可显著提升开口识别率。
 const SPEECH_LEAD_SILENCE_SAMPLES: usize = 3_200;
+/// 转写时段尾追加静音（500ms @16kHz）：给 whisper 明确的「文本→静音」结束信号，
+/// 输出 [_EOT_] 而非孤立结尾时间戳，避免边界情况下整段结果不可用。
+const SPEECH_TAIL_SILENCE_SAMPLES: usize = 8_000;
 const PENDING_INTERVAL_MS: u64 = 800;
 const ROLLING_CAP_SAMPLES: usize = 16_000 * 1_600 / 1_000;
 const MODEL_CANDIDATES: &[&str] = &["ggml-large-v3-turbo-q5_0.bin", "ggml-base-q5_0.bin"];
@@ -224,11 +228,19 @@ fn process_frame(
         for ev in s.segmenter.feed(prob, chunk) {
             let SegmentEvent::SegmentCompleted(pcm) = ev;
             let transcribe_started = std::time::Instant::now();
-            // 段首前置 200ms 静音：whisper 对直接从语音开始的音频易吞掉开头词，
-            // 前置静音上下文可显著提升开口识别率。
+            // 段首前置 200ms 静音（开头吞字修复）+ 段尾追加 100ms 静音
+            // （single-timestamp-ending 修复，两者互不干扰）：
+            // - 段首静音给 whisper 开头上下文，避免吞掉第一个词；
+            // - 段尾静音提供「文本→静音」的结束信号，避免输出孤立结尾时间戳
+            //   触发 whisper.cpp 的 "single timestamp ending - skip entire chunk"。
             let mut padded = vec![0i16; SPEECH_LEAD_SILENCE_SAMPLES];
             padded.extend_from_slice(&pcm);
-            let text = worker.transcribe_text(&padded).unwrap_or_default();
+            padded.extend_from_slice(&vec![0i16; SPEECH_TAIL_SILENCE_SAMPLES]);
+            let mut text = worker.transcribe_text(&padded).unwrap_or_default();
+            // 兜底：填充版失败时用原始音频重试一次
+            if text.trim().is_empty() {
+                text = worker.transcribe_text(&pcm).unwrap_or_default();
+            }
             let duration_ms = transcribe_started.elapsed().as_millis() as u64;
             if !text.trim().is_empty() {
                 let ended = now;

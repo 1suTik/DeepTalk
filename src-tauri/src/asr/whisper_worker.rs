@@ -104,10 +104,11 @@ impl WhisperWorker {
             .map_err(|e| WhisperError::Whisper(e.to_string()))?;
         let mut out = Vec::new();
         for seg in state.as_iter() {
-            let no_speech = seg.no_speech_probability();
-            if no_speech >= 0.6 {
-                continue;
-            }
+            // 不再按 no_speech ≥ 0.6 二次过滤：whisper.cpp 内部已用
+            // no_speech_thold(0.6) + logprob_thold(-1.0) 组合判定（高 no_speech 且
+            // 低 logprob 才丢弃），外层激进过滤会把正常短句/弱声音偶发误杀，
+            // 导致「问题问完无法转写输出」。静音幻觉仍由内部 thold 与下方 RMS
+            // 门控拦截（Task 4 silence fixture 断言验证）。
             let text = seg.to_str_lossy().unwrap_or_default().into_owned();
             if text.trim().is_empty() {
                 continue;
