@@ -170,7 +170,7 @@ export function SettingsPage({ initial, onSaved }: SettingsPageProps) {
               </span>
               {m.imported ? (
                 <span className="settings-page__model-state" data-ok={m.sha256Ok}>
-                  {m.sha256Ok ? "已导入 ✓" : "已导入（校验失败）"}
+                  {m.sha256Ok ? "已导入 ✓" : "已导入（待校验）"}
                 </span>
               ) : (
                 <span className="settings-page__model-state">未导入</span>

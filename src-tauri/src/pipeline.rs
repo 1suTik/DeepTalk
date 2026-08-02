@@ -19,6 +19,8 @@ use crate::vad::silero::SileroVad;
 
 // Silero v6 ONNX 要求输入精确 512 样本（32ms @16kHz）。
 const FRAME_SAMPLES: usize = 512;
+/// 转写前段首前置静音（200ms @16kHz）：提升 whisper 开头词识别率。
+const SPEECH_LEAD_SILENCE_SAMPLES: usize = 3_200;
 const PENDING_INTERVAL_MS: u64 = 800;
 const ROLLING_CAP_SAMPLES: usize = 16_000 * 1_600 / 1_000;
 const MODEL_CANDIDATES: &[&str] = &["ggml-large-v3-turbo-q5_0.bin", "ggml-base-q5_0.bin"];
@@ -222,7 +224,11 @@ fn process_frame(
         for ev in s.segmenter.feed(prob, chunk) {
             let SegmentEvent::SegmentCompleted(pcm) = ev;
             let transcribe_started = std::time::Instant::now();
-            let text = worker.transcribe_text(&pcm).unwrap_or_default();
+            // 段首前置 200ms 静音：whisper 对直接从语音开始的音频易吞掉开头词，
+            // 前置静音上下文可显著提升开口识别率。
+            let mut padded = vec![0i16; SPEECH_LEAD_SILENCE_SAMPLES];
+            padded.extend_from_slice(&pcm);
+            let text = worker.transcribe_text(&padded).unwrap_or_default();
             let duration_ms = transcribe_started.elapsed().as_millis() as u64;
             if !text.trim().is_empty() {
                 let ended = now;

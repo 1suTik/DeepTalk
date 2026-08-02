@@ -1,0 +1,19 @@
+# 统一换行策略：文本文件以 LF 入仓（core.autocrlf 不再将工作区转换为 CRLF）。
+* text=auto
+*.md text eol=lf
+*.rs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.sql text eol=lf
+*.toml text eol=lf
+tests/fixtures/** text eol=lf
+*.wav binary
+*.pdf binary
+*.docx binary
+*.bin binary
+*.onnx binary
+*.png binary
+*.jpg binary
+*.ico binary

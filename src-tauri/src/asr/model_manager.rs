@@ -84,8 +84,20 @@ pub fn load_manifest() -> Result<ModelManifest, ModelError> {
 }
 
 pub fn sha256_file(path: &Path) -> std::io::Result<String> {
-    let bytes = fs::read(path)?;
-    Ok(format!("{:x}", Sha256::digest(&bytes)))
+    // 流式分块读取：避免对 GB 级模型整文件读入内存
+    use std::io::{BufReader, Read};
+    let file = std::fs::File::open(path)?;
+    let mut reader = BufReader::with_capacity(64 * 1024, file);
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), ModelError> {

@@ -348,6 +348,8 @@ pub struct ModelStatus {
 }
 
 /// 设置页：模型清单与导入状态。
+/// 轻量实现：状态取自注册表已登记的 SHA-256 与文件存在性，**不重新哈希模型文件**
+/// （574MB 全量哈希会阻塞主线程导致窗口未响应；完整校验由「扫描并校验」在后台线程执行）。
 #[tauri::command]
 pub fn list_models() -> Result<Vec<ModelStatus>, String> {
     let mgr = crate::asr::model_manager::ModelManager::new(
@@ -356,15 +358,24 @@ pub fn list_models() -> Result<Vec<ModelStatus>, String> {
     .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for entry in &mgr.manifest().models {
-        let imported = mgr.resolve_path(&entry.id).is_ok();
+        let imported = if entry.id == "silero-vad-v6" {
+            // Silero 固定落盘为 silero_vad.onnx（VAD 加载路径）
+            mgr.models_dir().join("silero_vad.onnx").is_file()
+        } else {
+            mgr.resolve_path(&entry.id).is_ok()
+        };
+        // 用导入时登记的 SHA-256 与清单比对；silero 固定文件名也视为已导入
+        let registered_sha = mgr
+            .registry()
+            .models
+            .iter()
+            .find(|m| m.id == entry.id)
+            .map(|m| m.sha256.clone())
+            .unwrap_or_default();
         let sha256_ok = if entry.sha256.is_empty() {
             imported
         } else {
-            matches!(
-                mgr.resolve_path(&entry.id)
-                    .map(|p| { crate::asr::model_manager::verify_sha256(&p, &entry.sha256) }),
-                Ok(Ok(()))
-            )
+            !registered_sha.is_empty() && registered_sha.eq_ignore_ascii_case(&entry.sha256)
         };
         out.push(ModelStatus {
             id: entry.id.clone(),
@@ -420,7 +431,10 @@ pub fn scan_and_import(
                 .models
                 .iter()
                 .find(|e| {
-                    (size == e.size_bytes && !registry_ids.contains(&e.id))
+                    if registry_ids.contains(&e.id) {
+                        return false; // 已登记条目不重复导入
+                    }
+                    size == e.size_bytes
                         || (!e.sha256.is_empty() && e.sha256.eq_ignore_ascii_case(&sha))
                 })
                 .map(|e| e.id.clone())
@@ -454,9 +468,14 @@ pub fn scan_and_import(
     Ok(imported)
 }
 
+/// 扫描并按清单校验导入（可能对 GB 级模型做哈希，在后台线程执行避免卡 UI）。
 #[tauri::command]
-pub fn scan_and_import_models() -> Result<Vec<crate::asr::model_manager::ImportedModel>, String> {
-    scan_and_import(&crate::asr::model_manager::default_models_dir())
+pub async fn scan_and_import_models(
+) -> Result<Vec<crate::asr::model_manager::ImportedModel>, String> {
+    let dir = crate::asr::model_manager::default_models_dir();
+    tokio::task::spawn_blocking(move || scan_and_import(&dir))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

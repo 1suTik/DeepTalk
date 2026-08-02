@@ -107,6 +107,9 @@ pub fn normalize_text(text: &str) -> String {
 fn extract_plain(path: &Path, markdown: bool) -> Result<(String, Vec<String>), ExtractError> {
     let raw = std::fs::read(path)?;
     let raw = String::from_utf8_lossy(&raw).into_owned();
+    // 统一换行：CRLF（Windows 文档常见）下 "\r\n\r\n" 不含连续 "\n\n"，
+    // 直接 split 会把整篇当成一段，标题提取失效。
+    let raw = raw.replace("\r\n", "\n");
     let mut title = String::new();
     let mut paragraphs = Vec::new();
     for para in raw.split("\n\n") {
