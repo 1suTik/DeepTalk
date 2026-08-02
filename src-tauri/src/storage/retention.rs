@@ -38,20 +38,23 @@ impl Retention {
         self.db.purge_expired(days, now_ms())
     }
 
-    /// 启动后立即清理一次，之后每 24 小时清理一次（后台任务）。
+    /// 启动后立即清理一次，之后每 24 小时清理一次（后台线程）。
+    ///
+    /// 使用纯 std 线程而非 `tokio::spawn`：本函数在 Tauri runtime 初始化前
+    /// （`AppState::new`）被调用，异步上下文不存在会 panic。
     pub fn spawn_periodic(db: Db) {
-        tokio::spawn(async move {
-            loop {
+        std::thread::Builder::new()
+            .name("retention".into())
+            .spawn(move || loop {
                 let retention = Retention::new(db.clone());
-                match tokio::task::spawn_blocking(move || retention.purge_expired()).await {
-                    Ok(Ok(n)) if n > 0 => warn!("已清理 {n} 条过期会议记录"),
-                    Ok(Err(e)) => warn!("保留策略清理失败：{e}"),
-                    Err(e) => warn!("保留策略任务失败：{e}"),
-                    _ => {}
+                match retention.purge_expired() {
+                    Ok(n) if n > 0 => warn!("已清理 {n} 条过期会议记录"),
+                    Ok(_) => {}
+                    Err(e) => warn!("保留策略清理失败：{e}"),
                 }
-                tokio::time::sleep(PERIODIC_INTERVAL).await;
-            }
-        });
+                std::thread::sleep(PERIODIC_INTERVAL);
+            })
+            .ok();
     }
 }
 
