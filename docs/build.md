@@ -17,10 +17,14 @@
 
 ```powershell
 $env:CARGO_TARGET_DIR = "G:\t"          # 260 字符路径规避；勿改回 src-tauri\target
-$env:VULKAN_SDK = "C:\VulkanSDK\1.4.350.0"
-$env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
+$env:RUSTUP_HOME = "G:\Project\build-tools\rust\.rustup"
+$env:CARGO_HOME = "G:\Project\build-tools\rust\.cargo"
+$env:VULKAN_SDK = "G:\Project\build-tools\VulkanSDK\1.4.350.0"
+$env:LIBCLANG_PATH = "G:\Project\build-tools\LLVM\bin"
 $env:CMAKE_GENERATOR = "Ninja"
 ```
+
+工具链统一位于 `G:\Project\build-tools\`（rust\.cargo、rust\.rustup、VulkanSDK、LLVM、CMake、ninja）；CMake/Ninja/cargo 通过 PATH 解析，Vulkan SDK 的 Bin 与 CMake\bin 已同步替换系统 PATH 条目。
 
 每次构建在 **vcvars64 环境**下执行（`cmd /c "call vcvars64.bat && cargo ..."`）；新终端先运行 `.\scripts\build-env.ps1`（须当前会话执行）。
 

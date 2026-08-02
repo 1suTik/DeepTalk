@@ -27,35 +27,61 @@ if (Test-Path -LiteralPath $vcvars) {
     Write-Warning "vcvars64.bat not found; VS developer environment not loaded."
 }
 
-$vulkanSdk = Get-ChildItem "C:\VulkanSDK" -Directory -ErrorAction SilentlyContinue |
+# 工具链统一目录（2026-08-03 从 C 盘迁移）
+$buildTools = "G:\Project\build-tools"
+
+$vulkanRoot = Join-Path $buildTools "VulkanSDK"
+$vulkanSdk = Get-ChildItem $vulkanRoot -Directory -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending | Select-Object -First 1
 if ($vulkanSdk) {
     Set-Item -Path "Env:VULKAN_SDK" -Value $vulkanSdk.FullName
     $env:Path = "$($vulkanSdk.FullName)\Bin;$env:Path"
+} else {
+    Write-Warning "Vulkan SDK not found under $vulkanRoot"
 }
 
-$llvm = "C:\Program Files\LLVM\bin"
+$llvm = Join-Path $buildTools "LLVM\bin"
 if (Test-Path -LiteralPath "$llvm\libclang.dll") {
     Set-Item -Path "Env:LIBCLANG_PATH" -Value $llvm
     $env:Path = "$llvm;$env:Path"
+} else {
+    Write-Warning "LLVM not found at $llvm"
 }
 
-$cmake = "C:\Program Files\CMake\bin"
+$cmake = Join-Path $buildTools "CMake\bin"
 if (Test-Path -LiteralPath "$cmake\cmake.exe") {
     $env:Path = "$cmake;$env:Path"
+} else {
+    Write-Warning "CMake not found at $cmake"
 }
 
-$ninja = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter ninja.exe -ErrorAction SilentlyContinue |
-    Select-Object -First 1 -ExpandProperty FullName
-if ($ninja) {
-    $env:Path = "$(Split-Path -Parent $ninja);$env:Path"
+$ninja = Join-Path $buildTools "ninja"
+if (Test-Path -LiteralPath "$ninja\ninja.exe") {
+    $env:Path = "$ninja;$env:Path"
+} else {
+    Write-Warning "Ninja not found at $ninja"
 }
 
 Set-Item -Path "Env:CMAKE_GENERATOR" -Value "Ninja"
 Set-Item -Path "Env:CARGO_TARGET_DIR" -Value "G:\t"
-$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+
+# Rust 工具链：未持久化时自愈（正常由 setx 提供）
+if (-not $env:RUSTUP_HOME) {
+    Set-Item -Path "Env:RUSTUP_HOME" -Value (Join-Path $buildTools "rust\.rustup")
+}
+if (-not $env:CARGO_HOME) {
+    Set-Item -Path "Env:CARGO_HOME" -Value (Join-Path $buildTools "rust\.cargo")
+}
+$cargoBin = Join-Path $env:CARGO_HOME "bin"
+if (Test-Path -LiteralPath "$cargoBin\cargo.exe") {
+    $env:Path = "$cargoBin;$env:Path"
+} else {
+    Write-Warning "cargo not found at $cargoBin"
+}
 
 Write-Host "Build environment ready:" -ForegroundColor Green
+Write-Host "  RUSTUP_HOME      = $env:RUSTUP_HOME"
+Write-Host "  CARGO_HOME       = $env:CARGO_HOME"
 Write-Host "  VULKAN_SDK       = $env:VULKAN_SDK"
 Write-Host "  LIBCLANG_PATH    = $env:LIBCLANG_PATH"
 Write-Host "  CMAKE_GENERATOR  = $env:CMAKE_GENERATOR"
