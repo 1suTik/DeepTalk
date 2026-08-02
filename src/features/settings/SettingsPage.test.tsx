@@ -5,8 +5,8 @@ import type { AppSettings } from "../../types/domain";
 
 const base: AppSettings = {
   providerKind: "deepseek",
-  baseUrl: "https://api.deepseek.com/v1",
-  model: "deepseek-chat",
+  baseUrl: "https://api.deepseek.com",
+  model: "deepseek-v4-flash",
   hasApiKey: false,
   retentionDays: 7,
   microphoneEnabled: false,
@@ -18,9 +18,42 @@ vi.mock("../../lib/tauri", () => ({
   saveSettings: vi.fn(async () => undefined),
   testProviderConnection: vi.fn(async () => "连接成功，首个输出：你好"),
   clearAllData: vi.fn(async () => undefined),
+  listModels: vi.fn(async () => [
+    {
+      id: "ggml-large-v3-turbo-q5_0",
+      name: "Whisper large-v3-turbo (Q5_0)",
+      sizeBytes: 574041195,
+      tier: "high",
+      imported: true,
+      sha256Ok: true,
+    },
+    {
+      id: "silero-vad-v6",
+      name: "Silero VAD v6 (16k ONNX)",
+      sizeBytes: 2327524,
+      tier: "vad",
+      imported: false,
+      sha256Ok: false,
+    },
+  ]),
+  scanAndImportModels: vi.fn(async () => [
+    {
+      id: "silero-vad-v6",
+      fileName: "silero_vad.onnx",
+      sha256: "2623a2...",
+      sizeBytes: 2327524,
+      importedAtMs: 0,
+    },
+  ]),
 }));
 
-import { clearAllData, getSettings, saveSettings, testProviderConnection } from "../../lib/tauri";
+import {
+  clearAllData,
+  getSettings,
+  saveSettings,
+  scanAndImportModels,
+  testProviderConnection,
+} from "../../lib/tauri";
 
 describe("SettingsPage", () => {
   it("switching provider updates default base url", () => {
@@ -74,6 +107,17 @@ describe("SettingsPage", () => {
   it("loads settings from backend when no initial provided", async () => {
     render(<SettingsPage />);
     await waitFor(() => expect(getSettings).toHaveBeenCalled());
-    expect(await screen.findByLabelText(/模型 ID/)).toHaveValue("deepseek-chat");
+    expect(await screen.findByLabelText(/模型 ID/)).toHaveValue("deepseek-v4-flash");
+  });
+
+  it("shows model import status and scans for new models", async () => {
+    render(<SettingsPage initial={base} />);
+    expect(await screen.findByTestId("models-section")).toBeVisible();
+    expect(screen.getByText("Whisper large-v3-turbo (Q5_0)")).toBeVisible();
+    expect(screen.getByText("已导入 ✓")).toBeVisible();
+    expect(screen.getByText("未导入")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "扫描并校验" }));
+    await waitFor(() => expect(scanAndImportModels).toHaveBeenCalled());
+    expect(await screen.findByTestId("scan-result")).toHaveTextContent("已导入 1 个模型");
   });
 });

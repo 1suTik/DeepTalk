@@ -487,6 +487,64 @@ button {
   color: var(--good);
 }
 
+.settings-page__section h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.settings-page__hint {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.settings-page__models {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-page__models li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.settings-page__model-name {
+  flex: 1;
+}
+
+.settings-page__model-size {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.settings-page__model-state {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.settings-page__model-state[data-ok="true"] {
+  color: var(--good);
+}
+
+.settings-page__scan {
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+}
+
 .settings-page__check {
   flex-direction: row;
   align-items: center;

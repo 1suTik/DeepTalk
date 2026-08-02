@@ -322,6 +322,125 @@ pub fn clear_all_data(state: State<'_, AppState>) -> Result<(), String> {
     state.db.purge_all().map_err(|e| e.to_string())
 }
 
+// ---------------------------------------------------------------------------
+// 模型管理命令（Task 11：本地导入体验，不做自动下载）
+// ---------------------------------------------------------------------------
+
+/// 清单模型 + 本地导入状态（设置页模型卡片）。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelStatus {
+    pub id: String,
+    pub name: String,
+    pub size_bytes: u64,
+    pub tier: String,
+    pub imported: bool,
+    pub sha256_ok: bool,
+}
+
+/// 设置页：模型清单与导入状态。
+#[tauri::command]
+pub fn list_models() -> Result<Vec<ModelStatus>, String> {
+    let mgr = crate::asr::model_manager::ModelManager::new(
+        crate::asr::model_manager::default_models_dir(),
+    )
+    .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for entry in &mgr.manifest().models {
+        let imported = mgr.resolve_path(&entry.id).is_ok();
+        let sha256_ok = if entry.sha256.is_empty() {
+            imported
+        } else {
+            match mgr.resolve_path(&entry.id).map(|p| {
+                crate::asr::model_manager::verify_sha256(&p, &entry.sha256)
+            }) {
+                Ok(Ok(())) => true,
+                _ => false,
+            }
+        };
+        out.push(ModelStatus {
+            id: entry.id.clone(),
+            name: entry.name.clone(),
+            size_bytes: entry.size_bytes,
+            tier: entry.tier.clone(),
+            imported,
+            sha256_ok,
+        });
+    }
+    Ok(out)
+}
+
+/// 扫描模型目录中未登记的候选文件并按清单（SHA-256/大小）匹配导入；
+/// Silero 条目额外落盘为 `silero_vad.onnx`（VAD 固定文件名）。
+pub fn scan_and_import(dir: &std::path::Path) -> Result<Vec<crate::asr::model_manager::ImportedModel>, String> {
+    let mut mgr = crate::asr::model_manager::ModelManager::new(dir.to_path_buf())
+        .map_err(|e| e.to_string())?;
+    let registry_ids: std::collections::HashSet<String> =
+        mgr.registry().models.iter().map(|m| m.id.clone()).collect();
+    let mut imported: Vec<crate::asr::model_manager::ImportedModel> = Vec::new();
+    let mut scanned: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if !p.is_file() {
+                continue;
+            }
+            let is_candidate = p.extension().map(|x| {
+                let x = x.to_string_lossy().to_lowercase();
+                x == "bin" || x == "onnx"
+            }).unwrap_or(false);
+            if is_candidate && !p.file_name().map(|n| n.to_string_lossy().starts_with("silero_vad.onnx")).unwrap_or(false) {
+                scanned.push(p);
+            }
+        }
+    }
+    for p in scanned {
+        let matched_id = {
+            let size = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+            let sha = crate::asr::model_manager::sha256_file(&p).unwrap_or_default();
+            mgr.manifest()
+                .models
+                .iter()
+                .find(|e| {
+                    (size == e.size_bytes && !registry_ids.contains(&e.id))
+                        || (!e.sha256.is_empty() && e.sha256.eq_ignore_ascii_case(&sha))
+                })
+                .map(|e| e.id.clone())
+        };
+        if let Some(id) = matched_id {
+            if id == "silero-vad-v6" {
+                // 固定落盘为 silero_vad.onnx（VAD 加载路径），并登记注册表
+                let dest = dir.join("silero_vad.onnx");
+                std::fs::copy(&p, &dest).map_err(|e| e.to_string())?;
+                let sha = crate::asr::model_manager::sha256_file(&dest).unwrap_or_default();
+                let size = std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+                let entry = crate::asr::model_manager::ImportedModel {
+                    id: id.clone(),
+                    file_name: "silero_vad.onnx".into(),
+                    sha256: sha,
+                    size_bytes: size,
+                    imported_at_ms: crate::storage::retention::now_ms(),
+                };
+                mgr.registry_mut().models.retain(|m| m.id != id);
+                mgr.registry_mut().models.push(entry.clone());
+                mgr.save_registry().map_err(|e| e.to_string())?;
+                imported.push(entry);
+            } else {
+                match mgr.import_model(&p) {
+                    Ok(m) => imported.push(m),
+                    Err(e) => tracing::warn!("模型导入失败 {}: {e}", p.display()),
+                }
+            }
+        }
+    }
+    Ok(imported)
+}
+
+#[tauri::command]
+pub fn scan_and_import_models() -> Result<Vec<crate::asr::model_manager::ImportedModel>, String> {
+    scan_and_import(&crate::asr::model_manager::default_models_dir())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,5 +562,17 @@ mod tests {
     fn credential_id_is_kind_scoped() {
         assert_eq!(credential_account("deepseek"), "api-key:deepseek");
         assert_eq!(credential_account("openai"), "api-key:openai");
+    }
+
+    #[test]
+    fn scan_ignores_unmatched_files_and_tmp_artifacts() {
+        let dir = std::env::temp_dir().join(format!("maa-scan-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // 未匹配清单的随机文件不应被登记
+        std::fs::write(dir.join("random.bin"), vec![0u8; 1024]).unwrap();
+        std::fs::write(dir.join("notes.txt"), b"not a model").unwrap();
+        let imported = super::scan_and_import(&dir).unwrap();
+        assert!(imported.is_empty(), "无匹配文件不得导入");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

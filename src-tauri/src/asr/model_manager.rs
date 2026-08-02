@@ -154,6 +154,20 @@ impl ModelManager {
         &self.registry
     }
 
+    pub fn registry_mut(&mut self) -> &mut ModelRegistry {
+        &mut self.registry
+    }
+
+    /// 持久化注册表（扫描导入等外部流程需要）。
+    pub fn save_registry(&self) -> Result<(), ModelError> {
+        let tmp = self.models_dir.join(format!("{REGISTRY_FILE}.tmp"));
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(serde_json::to_string_pretty(&self.registry)?.as_bytes())?;
+        f.flush()?;
+        self.atomic_replace(&tmp, &self.models_dir.join(REGISTRY_FILE))?;
+        Ok(())
+    }
+
     /// 本地导入模型：计算 SHA-256、复制到模型目录（临时文件 + 原子重命名）、登记注册表。
     /// 若源文件与清单中某条目大小一致，则自动采用该条目的 id。
     pub fn import_model(&mut self, source: &Path) -> Result<ImportedModel, ModelError> {
@@ -257,15 +271,6 @@ impl ModelManager {
                 actual: len,
             });
         }
-        Ok(())
-    }
-
-    fn save_registry(&self) -> Result<(), ModelError> {
-        let tmp = self.models_dir.join(format!("{REGISTRY_FILE}.tmp"));
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(serde_json::to_string_pretty(&self.registry)?.as_bytes())?;
-        f.flush()?;
-        self.atomic_replace(&tmp, &self.models_dir.join(REGISTRY_FILE))?;
         Ok(())
     }
 }

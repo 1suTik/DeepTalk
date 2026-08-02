@@ -36,6 +36,8 @@ pub fn run() {
             commands::save_settings,
             commands::test_provider_connection,
             commands::clear_all_data,
+            commands::list_models,
+            commands::scan_and_import_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

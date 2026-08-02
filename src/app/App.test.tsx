@@ -23,6 +23,8 @@ vi.mock("../lib/tauri", () => ({
   saveSettings: vi.fn(async () => undefined),
   testProviderConnection: vi.fn(async () => "ok"),
   clearAllData: vi.fn(async () => undefined),
+  listModels: vi.fn(async () => []),
+  scanAndImportModels: vi.fn(async () => []),
 }));
 
 describe("App (main window)", () => {

@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { clearAllData, getSettings, saveSettings, testProviderConnection } from "../../lib/tauri";
+import {
+  clearAllData,
+  getSettings,
+  listModels,
+  saveSettings,
+  scanAndImportModels,
+  testProviderConnection,
+  type ModelStatus,
+} from "../../lib/tauri";
 import type { AppSettings } from "../../types/domain";
 
 const DEFAULT_BASE_URLS: Record<string, string> = {
@@ -8,23 +16,36 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
   custom: "http://127.0.0.1:11434/v1",
 };
 
+const MODEL_DIR_HINT = "模型目录：%LOCALAPPDATA%\\MeetingAIAssistant\\models\\";
+
 export interface SettingsPageProps {
   initial?: AppSettings;
   onSaved?: (settings: AppSettings) => void;
 }
 
-/** 设置页：provider / base URL / model / API Key（永不回显）/ 连接测试 / 保留天数 / 清除数据。 */
+/** 设置页：provider / base URL / model / API Key（永不回显）/ 连接测试 / 模型导入 / 保留天数 / 清除数据。 */
 export function SettingsPage({ initial, onSaved }: SettingsPageProps) {
   const [settings, setSettings] = useState<AppSettings | null>(initial ?? null);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [models, setModels] = useState<ModelStatus[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+
+  const refreshModels = useCallback(() => {
+    void listModels().then(setModels);
+  }, []);
 
   useEffect(() => {
     if (initial) return;
     void getSettings().then(setSettings);
   }, [initial]);
+
+  useEffect(() => {
+    refreshModels();
+  }, [refreshModels]);
 
   const update = useCallback((patch: Partial<AppSettings>) => {
     setSettings((s) => (s ? { ...s, ...patch } : s));
@@ -131,6 +152,62 @@ export function SettingsPage({ initial, onSaved }: SettingsPageProps) {
           {testResult}
         </p>
       )}
+
+      <hr />
+
+      <section className="settings-page__section" data-testid="models-section">
+        <h3>语音模型（本地导入，不做自动下载）</h3>
+        <p className="settings-page__hint">{MODEL_DIR_HINT}</p>
+        <p className="settings-page__hint">
+          将下载好的模型文件放入上述目录后，点击「扫描并校验」；校验通过后自动登记。
+        </p>
+        <ul className="settings-page__models">
+          {models.map((m) => (
+            <li key={m.id} data-imported={m.imported} data-testid={`model-${m.id}`}>
+              <span className="settings-page__model-name">{m.name}</span>
+              <span className="settings-page__model-size">
+                {(m.sizeBytes / 1024 / 1024).toFixed(1)} MB
+              </span>
+              {m.imported ? (
+                <span className="settings-page__model-state" data-ok={m.sha256Ok}>
+                  {m.sha256Ok ? "已导入 ✓" : "已导入（校验失败）"}
+                </span>
+              ) : (
+                <span className="settings-page__model-state">未导入</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          className="settings-page__scan"
+          onClick={() => {
+            setScanning(true);
+            setScanResult(null);
+            void scanAndImportModels()
+              .then((imported) => {
+                setScanResult(
+                  imported.length > 0
+                    ? `已导入 ${imported.length} 个模型：${imported.map((m) => m.id).join("、")}`
+                    : "未发现可导入的新模型",
+                );
+                refreshModels();
+              })
+              .catch((e) => setScanResult(`扫描失败：${String(e)}`))
+              .finally(() => setScanning(false));
+          }}
+          disabled={scanning}
+        >
+          {scanning ? "扫描中…" : "扫描并校验"}
+        </button>
+        {scanResult && (
+          <p className="settings-page__result" data-testid="scan-result">
+            {scanResult}
+          </p>
+        )}
+      </section>
+
+      <hr />
 
       <label className="settings-page__field">
         <span>保留天数（默认 7 天自动删除未固定的会议记录）</span>

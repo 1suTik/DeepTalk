@@ -56,6 +56,33 @@ export async function cancelCurrentAnswer(): Promise<void> {
   return invoke("cancel_current_answer");
 }
 
+export interface ModelStatus {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  tier: string;
+  imported: boolean;
+  sha256Ok: boolean;
+}
+
+export interface ImportedModel {
+  id: string;
+  fileName: string;
+  sha256: string;
+  sizeBytes: number;
+  importedAtMs: number;
+}
+
+/** 模型清单与本地导入状态（设置页模型卡片）。 */
+export async function listModels(): Promise<ModelStatus[]> {
+  return invoke("list_models");
+}
+
+/** 扫描模型目录并按清单校验导入（用户本地导入，不做自动下载）。 */
+export async function scanAndImportModels(): Promise<ImportedModel[]> {
+  return invoke("scan_and_import_models");
+}
+
 /** 订阅后端事件，返回取消订阅函数；非 Tauri 环境返回空操作。 */
 export function onEvent<K extends keyof EventPayloads>(
   event: K,
