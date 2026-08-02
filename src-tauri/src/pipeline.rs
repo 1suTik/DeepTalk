@@ -164,10 +164,7 @@ fn run_pipeline(
         }
     };
     let worker = match WhisperWorker::new(model) {
-        Ok(w) => {
-            eprintln!("[pipeline] WhisperWorker loaded OK ({:?})", w.backend);
-            w
-        }
+        Ok(w) => w,
         Err(e) => {
             eprintln!("[pipeline] WhisperWorker init FAIL: {e}");
             return;
@@ -175,30 +172,12 @@ fn run_pipeline(
     };
     tracing::info!(backend = ?worker.backend, "本地转写模型已加载");
     let mut segs = Segmenters::new();
-    let mut total_frames: u64 = 0;
-    let mut last_log = std::time::Instant::now();
-    let mut frames_in_window: u32 = 0;
     while !stop.load(Ordering::SeqCst) {
         let frame = match frame_rx.recv_timeout(Duration::from_millis(50)) {
             Ok(f) => f,
-            Err(std_mpsc::RecvTimeoutError::Timeout) => {
-                if last_log.elapsed().as_secs() >= 2 {
-                    eprintln!(
-                        "[pipeline] 2s 内无音频帧（total={total_frames}）——默认播放设备可能无输出或采集失败"
-                    );
-                    last_log = std::time::Instant::now();
-                }
-                continue;
-            }
+            Err(std_mpsc::RecvTimeoutError::Timeout) => continue,
             Err(_) => break,
         };
-        total_frames += 1;
-        frames_in_window += 1;
-        if last_log.elapsed().as_secs() >= 2 {
-            eprintln!("[pipeline] 最近 2s 收到 {frames_in_window} 帧（total={total_frames}）");
-            frames_in_window = 0;
-            last_log = std::time::Instant::now();
-        }
         process_frame(&frame, &mut silero, &mut segs, &worker, &tx);
     }
     let _ = tx.blocking_send(PipelineEvent::CaptureState {
@@ -227,7 +206,7 @@ fn process_frame(
     });
     let now = frame.captured_at_ms;
     let s = segs.for_source(source);
-    // WASAPI 每包约 10ms（160 样本 @16kHz），累积到 30ms 帧（480 样本）再喂 VAD
+    // WASAPI 每包约 10ms（160 样本 @16kHz），累积到 512 样本（32ms）再喂 VAD
     s.frame_buf.extend_from_slice(&frame.samples_16khz_mono);
     let mut pos = 0usize;
     while s.frame_buf.len() - pos >= FRAME_SAMPLES {
@@ -236,30 +215,34 @@ fn process_frame(
         let prob = match silero.classify(&f32_frame) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("[pipeline] silero classify error: {e}");
+                tracing::error!(error = %e, "silero classify 失败");
                 0.0
             }
         };
-        {
-            // 诊断：前几次概率 + 每 2 秒一次
-            static PROB_LOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-            static LAST_PROB_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            let n = PROB_LOG.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if n < 10 {
-                eprintln!("[pipeline] vad prob#{n}: {prob:.3}");
-            }
-            let now_sec = now / 1000;
-            let last = LAST_PROB_LOG.swap(now_sec, std::sync::atomic::Ordering::SeqCst);
-            if now_sec != last && n >= 10 {
-                eprintln!("[pipeline] vad prob (2s): {prob:.3}");
-            }
-        }
         for ev in s.segmenter.feed(prob, chunk) {
             let SegmentEvent::SegmentCompleted(pcm) = ev;
+            let transcribe_started = std::time::Instant::now();
             let text = worker.transcribe_text(&pcm).unwrap_or_default();
+            let duration_ms = transcribe_started.elapsed().as_millis() as u64;
             if !text.trim().is_empty() {
                 let ended = now;
                 let started = ended.saturating_sub(pcm.len() as u64 / 16);
+                // 时间戳：speech_started / speech_ended / transcript_final
+                tracing::info!(
+                    point = "speech_started",
+                    id = format!("seg-{started}-{ended}"),
+                    at_ms = started
+                );
+                tracing::info!(
+                    point = "speech_ended",
+                    id = format!("seg-{started}-{ended}"),
+                    at_ms = ended
+                );
+                tracing::info!(
+                    point = "transcript_final",
+                    id = format!("seg-{started}-{ended}"),
+                    duration_ms = duration_ms
+                );
                 let _ = tx.blocking_send(PipelineEvent::TranscriptFinal(TranscriptInfo {
                     id: format!("seg-{started}-{ended}"),
                     source: source.into(),

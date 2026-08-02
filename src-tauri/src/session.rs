@@ -173,7 +173,6 @@ pub struct Orchestrator {
     answer_rx: Mutex<Option<mpsc::Receiver<AnswerCommand>>>,
     recent_transcript: Mutex<VecDeque<String>>,
     last_question: Mutex<Option<QuestionInfo>>,
-    last_level_log: Mutex<u64>,
     meeting_id: String,
     now: fn() -> u64,
 }
@@ -202,7 +201,6 @@ impl Orchestrator {
             answer_rx: Mutex::new(Some(answer_rx)),
             recent_transcript: Mutex::new(VecDeque::new()),
             last_question: Mutex::new(None),
-            last_level_log: Mutex::new(0),
             meeting_id,
             now: crate::storage::retention::now_ms,
         };
@@ -241,9 +239,7 @@ impl Orchestrator {
 
     /// 主循环：消费流水线事件与答案命令，直到停止。
     pub async fn run(self) -> Result<(), String> {
-        eprintln!("[session] orchestrator run: start");
         self.source.start()?;
-        eprintln!("[session] orchestrator run: source started");
         let mut source_rx = self.source.events();
         let mut answer_rx = self
             .answer_rx
@@ -258,16 +254,12 @@ impl Orchestrator {
                 active: true,
                 at_ms: now,
             });
-        eprintln!("[session] orchestrator run: entering event loop");
         loop {
             tokio::select! {
                 _ = self.stop.cancelled() => break,
                 ev = source_rx.recv() => match ev {
                     Some(e) => self.handle_pipeline(e).await,
-                    None => {
-                        eprintln!("[session] source channel closed");
-                        break;
-                    }
+                    None => break,
                 },
                 cmd = answer_rx.recv() => match cmd {
                     Some(AnswerCommand::Generate(q)) => self.generate(q).await,
@@ -279,7 +271,6 @@ impl Orchestrator {
                 },
             }
         }
-        eprintln!("[session] orchestrator run: stopping");
         // 停止：取消正在生成的答案并结束会议
         {
             let mut st = self.answer_state.lock().unwrap();
@@ -301,19 +292,6 @@ impl Orchestrator {
 
     async fn handle_pipeline(&self, ev: PipelineEvent) {
         let now = (self.now)();
-        match &ev {
-            PipelineEvent::AudioLevel { rms, .. } => {
-                // 诊断：每秒打印一次音量（证明事件到达编排器）
-                let now_sec = now / 1000;
-                let mut last = self.last_level_log.lock().unwrap();
-                if now_sec != *last {
-                    *last = now_sec;
-                    drop(last);
-                    eprintln!("[orchestrator] audio-level rms={rms:.4}");
-                }
-            }
-            other => eprintln!("[orchestrator] pipeline event: {other:?}"),
-        }
         match ev {
             PipelineEvent::CaptureState { source, active } => {
                 self.sink.emit(&OrchestrationEvent::CaptureState {
@@ -377,6 +355,13 @@ impl Orchestrator {
             source_segment_ids: vec![info.id.clone()],
         };
         *self.last_question.lock().unwrap() = Some(qinfo.clone());
+        // 时间戳：question_detected（检测耗时）
+        tracing::info!(
+            point = "question_detected",
+            id = qinfo.id,
+            confidence = qinfo.confidence,
+            at_ms = qinfo.detected_at_ms
+        );
         self.sink
             .emit(&OrchestrationEvent::QuestionDetected(qinfo.clone()));
         let mut recent = self.recent_transcript.lock().unwrap();
@@ -451,6 +436,7 @@ impl Orchestrator {
             let mut key_points: Vec<String> = Vec::new();
             let mut follow_ups: Vec<String> = Vec::new();
             let mut status = "complete".to_string();
+            let mut first_delta_at: Option<u64> = None;
             match rx {
                 Ok(mut rx) => {
                     sink.emit(&OrchestrationEvent::AnswerStarted {
@@ -461,6 +447,20 @@ impl Orchestrator {
                         match rx.recv().await {
                             Some(AnswerEvent::Started) => {}
                             Some(AnswerEvent::ShortAnswerDelta(d)) => {
+                                if first_delta_at.is_none() {
+                                    // 时间戳：provider_connected / first_answer_delta
+                                    tracing::info!(
+                                        point = "provider_connected",
+                                        id = qid,
+                                        duration_ms = now().saturating_sub(started_at)
+                                    );
+                                    tracing::info!(
+                                        point = "first_answer_delta",
+                                        id = qid,
+                                        duration_ms = now().saturating_sub(started_at)
+                                    );
+                                    first_delta_at = Some(now());
+                                }
                                 short_answer.push_str(&d);
                                 sink.emit(&OrchestrationEvent::AnswerDelta {
                                     question_id: qid.clone(),
