@@ -8,7 +8,7 @@ use super::{
     ProviderKind,
 };
 
-pub const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
+pub const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com";
 
 pub struct DeepSeekProvider {
     client: OpenAiCompatibleClient,

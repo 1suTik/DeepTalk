@@ -3,7 +3,7 @@ import { clearAllData, getSettings, saveSettings, testProviderConnection } from 
 import type { AppSettings } from "../../types/domain";
 
 const DEFAULT_BASE_URLS: Record<string, string> = {
-  deepseek: "https://api.deepseek.com/v1",
+  deepseek: "https://api.deepseek.com",
   openai: "https://api.openai.com/v1",
   custom: "http://127.0.0.1:11434/v1",
 };

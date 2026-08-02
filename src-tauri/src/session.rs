@@ -173,6 +173,7 @@ pub struct Orchestrator {
     answer_rx: Mutex<Option<mpsc::Receiver<AnswerCommand>>>,
     recent_transcript: Mutex<VecDeque<String>>,
     last_question: Mutex<Option<QuestionInfo>>,
+    last_level_log: Mutex<u64>,
     meeting_id: String,
     now: fn() -> u64,
 }
@@ -201,6 +202,7 @@ impl Orchestrator {
             answer_rx: Mutex::new(Some(answer_rx)),
             recent_transcript: Mutex::new(VecDeque::new()),
             last_question: Mutex::new(None),
+            last_level_log: Mutex::new(0),
             meeting_id,
             now: crate::storage::retention::now_ms,
         };
@@ -239,7 +241,9 @@ impl Orchestrator {
 
     /// 主循环：消费流水线事件与答案命令，直到停止。
     pub async fn run(self) -> Result<(), String> {
+        eprintln!("[session] orchestrator run: start");
         self.source.start()?;
+        eprintln!("[session] orchestrator run: source started");
         let mut source_rx = self.source.events();
         let mut answer_rx = self
             .answer_rx
@@ -254,12 +258,16 @@ impl Orchestrator {
                 active: true,
                 at_ms: now,
             });
+        eprintln!("[session] orchestrator run: entering event loop");
         loop {
             tokio::select! {
                 _ = self.stop.cancelled() => break,
                 ev = source_rx.recv() => match ev {
                     Some(e) => self.handle_pipeline(e).await,
-                    None => break,
+                    None => {
+                        eprintln!("[session] source channel closed");
+                        break;
+                    }
                 },
                 cmd = answer_rx.recv() => match cmd {
                     Some(AnswerCommand::Generate(q)) => self.generate(q).await,
@@ -271,6 +279,7 @@ impl Orchestrator {
                 },
             }
         }
+        eprintln!("[session] orchestrator run: stopping");
         // 停止：取消正在生成的答案并结束会议
         {
             let mut st = self.answer_state.lock().unwrap();
@@ -292,6 +301,19 @@ impl Orchestrator {
 
     async fn handle_pipeline(&self, ev: PipelineEvent) {
         let now = (self.now)();
+        match &ev {
+            PipelineEvent::AudioLevel { rms, .. } => {
+                // 诊断：每秒打印一次音量（证明事件到达编排器）
+                let now_sec = now / 1000;
+                let mut last = self.last_level_log.lock().unwrap();
+                if now_sec != *last {
+                    *last = now_sec;
+                    drop(last);
+                    eprintln!("[orchestrator] audio-level rms={rms:.4}");
+                }
+            }
+            other => eprintln!("[orchestrator] pipeline event: {other:?}"),
+        }
         match ev {
             PipelineEvent::CaptureState { source, active } => {
                 self.sink.emit(&OrchestrationEvent::CaptureState {
@@ -649,7 +671,7 @@ impl TauriSink {
 
 impl EventSink for TauriSink {
     fn emit(&self, ev: &OrchestrationEvent) {
-        let _ = match ev {
+        let result = match ev {
             OrchestrationEvent::CaptureState { source, active, at_ms } => self.app.emit(
                 "capture-state",
                 CaptureStatePayload {
@@ -727,6 +749,9 @@ impl EventSink for TauriSink {
                 },
             ),
         };
+        if let Err(e) = result {
+            eprintln!("[sink] emit failed: {e}");
+        }
     }
 }
 

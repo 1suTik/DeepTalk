@@ -16,10 +16,9 @@ use crate::audio::{AudioFrame, AudioSource};
 use crate::session::{PipelineEvent, PipelineSource, TranscriptInfo};
 use crate::vad::segmenter::{SegmentEvent, VadConfig, VadSegmenter};
 use crate::vad::silero::SileroVad;
-use crate::vad::VadClassifier;
 
-const FRAME_MS: u32 = 30;
-const FRAME_SAMPLES: usize = 16_000 * FRAME_MS as usize / 1_000;
+// Silero v6 ONNX 要求输入精确 512 样本（32ms @16kHz）。
+const FRAME_SAMPLES: usize = 512;
 const PENDING_INTERVAL_MS: u64 = 800;
 const ROLLING_CAP_SAMPLES: usize = 16_000 * 1_600 / 1_000;
 const MODEL_CANDIDATES: &[&str] = &["ggml-large-v3-turbo-q5_0.bin", "ggml-base-q5_0.bin"];
@@ -110,6 +109,8 @@ struct SourceSeg {
     segmenter: VadSegmenter,
     rolling: Vec<i16>,
     last_pending_ms: u64,
+    /// 不足 30ms 帧的样本累积（WASAPI 每包约 10ms，需拼帧）。
+    frame_buf: Vec<i16>,
 }
 
 impl SourceSeg {
@@ -118,6 +119,7 @@ impl SourceSeg {
             segmenter: VadSegmenter::new(VadConfig::default(), 16_000),
             rolling: Vec::with_capacity(ROLLING_CAP_SAMPLES),
             last_pending_ms: 0,
+            frame_buf: Vec::with_capacity(FRAME_SAMPLES * 2),
         }
     }
 }
@@ -152,27 +154,51 @@ fn run_pipeline(
     stop: Arc<AtomicBool>,
 ) {
     let mut silero = match SileroVad::new(silero_path) {
-        Ok(v) => v,
+        Ok(v) => {
+            eprintln!("[pipeline] SileroVad loaded OK");
+            v
+        }
         Err(e) => {
-            tracing::error!(error = %e, "Silero VAD 初始化失败");
+            eprintln!("[pipeline] SileroVad init FAIL: {e}");
             return;
         }
     };
     let worker = match WhisperWorker::new(model) {
-        Ok(w) => w,
+        Ok(w) => {
+            eprintln!("[pipeline] WhisperWorker loaded OK ({:?})", w.backend);
+            w
+        }
         Err(e) => {
-            tracing::error!(error = %e, "Whisper 模型加载失败");
+            eprintln!("[pipeline] WhisperWorker init FAIL: {e}");
             return;
         }
     };
     tracing::info!(backend = ?worker.backend, "本地转写模型已加载");
     let mut segs = Segmenters::new();
+    let mut total_frames: u64 = 0;
+    let mut last_log = std::time::Instant::now();
+    let mut frames_in_window: u32 = 0;
     while !stop.load(Ordering::SeqCst) {
         let frame = match frame_rx.recv_timeout(Duration::from_millis(50)) {
             Ok(f) => f,
-            Err(std_mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std_mpsc::RecvTimeoutError::Timeout) => {
+                if last_log.elapsed().as_secs() >= 2 {
+                    eprintln!(
+                        "[pipeline] 2s 内无音频帧（total={total_frames}）——默认播放设备可能无输出或采集失败"
+                    );
+                    last_log = std::time::Instant::now();
+                }
+                continue;
+            }
             Err(_) => break,
         };
+        total_frames += 1;
+        frames_in_window += 1;
+        if last_log.elapsed().as_secs() >= 2 {
+            eprintln!("[pipeline] 最近 2s 收到 {frames_in_window} 帧（total={total_frames}）");
+            frames_in_window = 0;
+            last_log = std::time::Instant::now();
+        }
         process_frame(&frame, &mut silero, &mut segs, &worker, &tx);
     }
     let _ = tx.blocking_send(PipelineEvent::CaptureState {
@@ -201,11 +227,33 @@ fn process_frame(
     });
     let now = frame.captured_at_ms;
     let s = segs.for_source(source);
-    for chunk in frame.samples_16khz_mono.chunks(FRAME_SAMPLES) {
-        if chunk.len() < FRAME_SAMPLES {
-            break;
+    // WASAPI 每包约 10ms（160 样本 @16kHz），累积到 30ms 帧（480 样本）再喂 VAD
+    s.frame_buf.extend_from_slice(&frame.samples_16khz_mono);
+    let mut pos = 0usize;
+    while s.frame_buf.len() - pos >= FRAME_SAMPLES {
+        let chunk = &s.frame_buf[pos..pos + FRAME_SAMPLES];
+        let f32_frame: Vec<f32> = chunk.iter().map(|&s| s as f32 / 32768.0).collect();
+        let prob = match silero.classify(&f32_frame) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("[pipeline] silero classify error: {e}");
+                0.0
+            }
+        };
+        {
+            // 诊断：前几次概率 + 每 2 秒一次
+            static PROB_LOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            static LAST_PROB_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let n = PROB_LOG.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if n < 10 {
+                eprintln!("[pipeline] vad prob#{n}: {prob:.3}");
+            }
+            let now_sec = now / 1000;
+            let last = LAST_PROB_LOG.swap(now_sec, std::sync::atomic::Ordering::SeqCst);
+            if now_sec != last && n >= 10 {
+                eprintln!("[pipeline] vad prob (2s): {prob:.3}");
+            }
         }
-        let prob = silero.classify_frame(chunk);
         for ev in s.segmenter.feed(prob, chunk) {
             let SegmentEvent::SegmentCompleted(pcm) = ev;
             let text = worker.transcribe_text(&pcm).unwrap_or_default();
@@ -246,16 +294,69 @@ fn process_frame(
         } else {
             s.rolling.clear();
         }
+        pos += FRAME_SAMPLES;
+    }
+    if pos > 0 {
+        s.frame_buf.drain(0..pos);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asr::whisper_worker::{fixture_path, read_wav_pcm16};
 
     #[test]
     fn frame_constants_are_consistent() {
-        assert_eq!(FRAME_SAMPLES, 480);
+        assert_eq!(FRAME_SAMPLES, 512);
         assert_eq!(ROLLING_CAP_SAMPLES, 25_600);
+    }
+
+    /// 真实链路验证：fixture 按 10ms（160 样本）分包模拟 WASAPI 包，
+    /// 走 process_frame 的拼帧 -> VAD -> 分段 -> 转写全流程。
+    /// 运行：`cargo test -- --ignored pipeline::tests::real_vad_from_10ms_packets`
+    #[test]
+    #[ignore = "requires locally imported whisper model and silero onnx"]
+    fn real_vad_from_10ms_packets() {
+        let models = crate::asr::model_manager::default_models_dir();
+        let silero_path = crate::vad::silero_model_path(&models);
+        // 诊断：打印模型输入/输出名
+        let session =
+            ort::session::Session::builder().expect("builder").commit_from_file(&silero_path).expect("session");
+        let inputs: Vec<String> = session.inputs().iter().map(|i| i.name().to_string()).collect();
+        let outputs: Vec<String> = session.outputs().iter().map(|o| o.name().to_string()).collect();
+        eprintln!("[diag] inputs={inputs:?} outputs={outputs:?}");
+        let mut silero = SileroVad::new(&silero_path).expect("silero onnx");
+        let worker =
+            WhisperWorker::new(&RealPipeline::find_model().expect("whisper model")).expect("worker");
+        eprintln!("backend: {:?}", worker.backend);
+        let (_, pcm) = read_wav_pcm16(&fixture_path("zh_question.wav")).expect("fixture");
+        let mut segs = Segmenters::new();
+        let (tx, rx) = mpsc::channel(64);
+        let mut rx = rx;
+        let mut packet = 0u64;
+        for chunk in pcm.chunks(160) {
+            if chunk.len() < 160 {
+                break;
+            }
+            let frame = AudioFrame {
+                source: AudioSource::System,
+                samples_16khz_mono: chunk.to_vec(),
+                captured_at_ms: packet * 10,
+            };
+            process_frame(&frame, &mut silero, &mut segs, &worker, &tx);
+            packet += 1;
+        }
+        let mut events: Vec<PipelineEvent> = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            events.push(ev);
+        }
+        eprintln!("events: {events:?}");
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, PipelineEvent::TranscriptFinal(_))),
+            "应产出最终转写: {events:?}"
+        );
     }
 }

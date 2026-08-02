@@ -407,8 +407,10 @@ mod tests {
     fn settings_load_uses_defaults_when_empty() {
         let db = Db::open_in_memory().unwrap();
         let creds = CredentialStore::new();
+        // 使用绝不会存在的 provider 名，避免本机 Credential Manager 中真实保存的 key 影响断言
+        db.set_setting("provider.kind", "never-used-provider").unwrap();
         let s = AppSettings::load(&db, &creds);
-        assert_eq!(s.provider_kind, "deepseek");
+        assert_eq!(s.provider_kind, "never-used-provider");
         assert_eq!(s.retention_days, 7);
         assert!(!s.microphone_enabled);
         assert!(!s.has_api_key);
