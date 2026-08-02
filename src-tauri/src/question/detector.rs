@@ -108,6 +108,13 @@ pub fn merge_window(items: &[(String, u64, u64)]) -> String {
         .join(" ")
 }
 
+/// 一方是另一方的前缀且长度差不超过 20 字符（转写分片续接场景，如
+/// "请介绍一下你负责的" 与 "请介绍一下你负责的项目"）。
+fn prefix_overlap(a: &str, b: &str) -> bool {
+    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    long.starts_with(short) && long.len().saturating_sub(short.len()) <= 20
+}
+
 impl QuestionDetector {
     pub fn new(config: QuestionConfig) -> Self {
         Self {
@@ -156,10 +163,16 @@ impl QuestionDetector {
         let confidence = classify(&text)?;
         let normalized = normalizer::normalize(&text);
         let dedup_ms = self.config.dedup_ms;
-        if let Some(&last) = self.last_triggered.get(&normalized) {
-            if now_ms.saturating_sub(last) < dedup_ms {
-                return None;
+        // 去重：完全重复，或与最近触发的问题互为前缀续接（转写分片导致同一句
+        // 被拆成多段 final，如"请介绍一下你负责的" + "项目"），避免同一问题重复触发。
+        let is_dup = self.last_triggered.iter().any(|(last, at)| {
+            if now_ms.saturating_sub(*at) >= dedup_ms {
+                return false;
             }
+            normalized == *last || prefix_overlap(&normalized, last)
+        });
+        if is_dup {
+            return None;
         }
         self.last_triggered.insert(normalized.clone(), now_ms);
         let question = self.build(&text, normalized, confidence, now_ms);
@@ -296,6 +309,39 @@ mod tests {
         d.push_final("请介绍一下你负责的项目", 40_000, 41_000);
         let q = d.check(42_000);
         assert!(q.is_some(), "after 30s the same question may trigger again");
+    }
+
+    #[test]
+    fn suppresses_split_final_segments_of_same_question() {
+        let mut d = detector();
+        // 同一句被转写拆成两段 final，且第二段是窗口内合并后的完整句。
+        d.push_final("请介绍一下你负责的", 0, 1000);
+        assert!(d.check(2000).is_some(), "first fragment triggers");
+        d.push_final("项目", 3000, 4000);
+        // 与最近触发的问题互为前缀续接 → 视为重复，不再触发第二段
+        assert!(d.check(5000).is_none(), "split continuation must be suppressed");
+    }
+
+    #[test]
+    fn different_questions_still_trigger_after_prefix_match() {
+        let mut d = detector();
+        d.push_final("请介绍一下你负责的项目", 0, 1000);
+        assert!(d.check(2000).is_some());
+        // 完全不同的问题不受影响
+        d.push_final("那项目的音频延迟怎么优化", 6000, 7000);
+        assert!(d.check(8000).is_some(), "different question must still trigger");
+    }
+
+    #[test]
+    fn prefix_overlap_helpers() {
+        assert!(prefix_overlap("请介绍一下你负责的", "请介绍一下你负责的项目"));
+        assert!(prefix_overlap("请介绍一下你负责的项目", "请介绍一下你负责的"));
+        assert!(!prefix_overlap("请介绍一下你负责的项目", "那项目的音频延迟怎么优化"));
+        // 超过 20 字符的续接不算（避免误杀较长的新问题）
+        assert!(!prefix_overlap(
+            "请介绍一下",
+            "请介绍一下你负责的项目以及团队规模和分工情况"
+        ));
     }
 
     #[test]
