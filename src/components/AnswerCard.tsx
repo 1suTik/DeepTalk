@@ -10,6 +10,8 @@ export interface AnswerCardProps {
   onPin?: () => void;
   onFontSize?: (delta: number) => void;
   copied?: boolean;
+  /** 对话流中问题气泡已展示问题文本，答案卡不再重复显示标题。 */
+  hideQuestion?: boolean;
 }
 
 /** 答案卡：流式短答 + 折叠的要点/追问 + 操作按钮。 */
@@ -22,16 +24,19 @@ export function AnswerCard({
   onPin,
   onFontSize,
   copied = false,
+  hideQuestion = false,
 }: AnswerCardProps) {
   const busy = answer.status === "streaming";
   return (
     <section className="answer-card" data-testid="answer-card" data-status={answer.status}>
-      <header className="answer-card__header">
-        <h3 className="answer-card__question">{question.normalizedText}</h3>
-        <span className="answer-card__badge">
-          {question.level === "maybe" ? "可能的问题" : "已识别"}
-        </span>
-      </header>
+      {!hideQuestion && (
+        <header className="answer-card__header">
+          <h3 className="answer-card__question">{question.normalizedText}</h3>
+          <span className="answer-card__badge">
+            {question.level === "maybe" ? "可能的问题" : "已识别"}
+          </span>
+        </header>
+      )}
 
       <div className="answer-card__toolbar" aria-label="答案操作">
         <button

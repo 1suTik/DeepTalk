@@ -211,6 +211,7 @@ export function MeetingPage() {
                   }
                   answer={msg.item}
                   copied={copied}
+                  hideQuestion
                   onCancel={() => void cancelCurrentAnswer()}
                   onRegenerate={() => void generateAnswer()}
                   onCopy={() => void handleCopy()}
