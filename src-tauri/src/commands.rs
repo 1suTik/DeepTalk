@@ -81,7 +81,7 @@ impl Default for AppSettings {
         Self {
             provider_kind: "deepseek".into(),
             base_url: crate::answer::deepseek::DEEPSEEK_BASE_URL.into(),
-            model: "deepseek-chat".into(),
+            model: "deepseek-v4-flash".into(),
             has_api_key: false,
             retention_days: 7,
             microphone_enabled: false,
@@ -108,7 +108,7 @@ impl AppSettings {
         Self {
             provider_kind,
             base_url: get("provider.base_url", crate::answer::deepseek::DEEPSEEK_BASE_URL),
-            model: get("provider.model", "deepseek-chat"),
+            model: get("provider.model", "deepseek-v4-flash"),
             has_api_key,
             retention_days: get("retention.days", "7").parse().unwrap_or(7),
             microphone_enabled: get("mic.enabled", "0") == "1",
