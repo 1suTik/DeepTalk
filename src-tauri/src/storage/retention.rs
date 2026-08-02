@@ -71,10 +71,7 @@ mod tests {
     fn purge_uses_setting_when_present() {
         let db = Db::open_in_memory().unwrap();
         db.set_setting(SETTING_KEY, "14").unwrap();
-        assert_eq!(
-            db.get_setting(SETTING_KEY).unwrap().as_deref(),
-            Some("14")
-        );
+        assert_eq!(db.get_setting(SETTING_KEY).unwrap().as_deref(), Some("14"));
     }
 
     #[test]

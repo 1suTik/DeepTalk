@@ -51,7 +51,9 @@ impl WhisperWorker {
     /// 故默认仅使用设备 0（用户显式设置 `GGML_VK_VISIBLE_DEVICES` 时不覆盖）。
     pub fn new(model_path: &Path) -> Result<Self, WhisperError> {
         if !model_path.is_file() {
-            return Err(WhisperError::ModelNotFound(model_path.display().to_string()));
+            return Err(WhisperError::ModelNotFound(
+                model_path.display().to_string(),
+            ));
         }
         let _guard = GPU_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         if std::env::var("GGML_VK_VISIBLE_DEVICES").is_err() {
@@ -78,7 +80,11 @@ impl WhisperWorker {
         // 静音幻觉抑制（whisper.cpp 默认阈值）：低 logprob 且高 no-speech 概率时丢弃文本。
         params.set_no_speech_thold(0.6);
         params.set_logprob_thold(-1.0);
-        Self { ctx, params, backend }
+        Self {
+            ctx,
+            params,
+            backend,
+        }
     }
 
     /// 转写一段音频，返回按时间排序的文本片段（no-speech 段被过滤）。
@@ -132,7 +138,10 @@ impl WhisperWorker {
 pub fn read_wav_pcm16(path: &Path) -> std::io::Result<(u32, Vec<i16>)> {
     let bytes = std::fs::read(path)?;
     if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "not a RIFF/WAVE file"));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "not a RIFF/WAVE file",
+        ));
     }
     let channels = u16::from_le_bytes([bytes[22], bytes[23]]) as usize;
     let rate = u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
@@ -147,7 +156,12 @@ pub fn read_wav_pcm16(path: &Path) -> std::io::Result<(u32, Vec<i16>)> {
     let mut samples = Vec::new();
     while pos + 8 <= bytes.len() {
         let chunk_id = &bytes[pos..pos + 4];
-        let chunk_len = u32::from_le_bytes([bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]]) as usize;
+        let chunk_len = u32::from_le_bytes([
+            bytes[pos + 4],
+            bytes[pos + 5],
+            bytes[pos + 6],
+            bytes[pos + 7],
+        ]) as usize;
         if chunk_id == b"data" {
             let data = &bytes[pos + 8..(pos + 8 + chunk_len).min(bytes.len())];
             samples = data
@@ -159,7 +173,10 @@ pub fn read_wav_pcm16(path: &Path) -> std::io::Result<(u32, Vec<i16>)> {
         pos += 8 + chunk_len;
     }
     if samples.is_empty() {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "no data chunk"));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "no data chunk",
+        ));
     }
     Ok((rate, samples))
 }
@@ -192,11 +209,12 @@ mod tests {
         match WhisperWorker::new(Path::new("Z:/no/such/model.bin")) {
             Err(WhisperError::ModelNotFound(_)) => {}
             _ => panic!("expected ModelNotFound error"),
-        }    }
+        }
+    }
 
     #[test]
     fn pcm_to_f32_mapping() {
-        let pcm = vec![-32_768i16, 0, 32_767];
+        let pcm = [-32_768i16, 0, 32_767];
         let f32v: Vec<f32> = pcm.iter().map(|&s| s as f32 / 32768.0).collect();
         assert!((f32v[0] - (-1.0)).abs() < 1e-4);
         assert_eq!(f32v[1], 0.0);

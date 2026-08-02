@@ -55,3 +55,7 @@ src-tauri/target/release/bundle/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# --- 项目专属 Agent 手册（本地私有，不入库） ---
+AGENTS.md
+TASK_STALLS.md

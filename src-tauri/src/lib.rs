@@ -1,10 +1,10 @@
 pub mod answer;
 pub mod asr;
 pub mod audio;
+mod commands;
 pub mod pipeline;
 pub mod profile;
 pub mod question;
-mod commands;
 pub mod session;
 mod state;
 pub mod storage;

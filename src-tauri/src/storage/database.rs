@@ -198,16 +198,18 @@ impl Db {
         Ok(())
     }
 
-    pub fn insert_question(
-        &self,
-        meeting_id: &str,
-        q: &QuestionRow,
-    ) -> Result<(), DbError> {
+    pub fn insert_question(&self, meeting_id: &str, q: &QuestionRow) -> Result<(), DbError> {
         let conn = self.inner.lock().unwrap();
         conn.execute(
             "INSERT INTO questions (id, meeting_id, text, confidence, detected_at_ms)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![q.id, meeting_id, q.text, q.confidence, q.detected_at_ms as i64],
+            params![
+                q.id,
+                meeting_id,
+                q.text,
+                q.confidence,
+                q.detected_at_ms as i64
+            ],
         )?;
         Ok(())
     }
@@ -277,11 +279,11 @@ impl Db {
     }
 
     pub fn count_segments(&self) -> Result<i64, DbError> {
-        Ok(self
-            .inner
-            .lock()
-            .unwrap()
-            .query_row("SELECT COUNT(*) FROM transcript_segments", [], |r| r.get(0))?)
+        Ok(self.inner.lock().unwrap().query_row(
+            "SELECT COUNT(*) FROM transcript_segments",
+            [],
+            |r| r.get(0),
+        )?)
     }
 
     pub fn count_questions(&self) -> Result<i64, DbError> {
@@ -301,11 +303,11 @@ impl Db {
     }
 
     pub fn count_profile_documents(&self) -> Result<i64, DbError> {
-        Ok(self
-            .inner
-            .lock()
-            .unwrap()
-            .query_row("SELECT COUNT(*) FROM profile_documents", [], |r| r.get(0))?)
+        Ok(self.inner.lock().unwrap().query_row(
+            "SELECT COUNT(*) FROM profile_documents",
+            [],
+            |r| r.get(0),
+        )?)
     }
 
     // ---- 保留策略 -----------------------------------------------------------
@@ -413,7 +415,10 @@ mod tests {
             "settings",
             "transcript_segments",
         ] {
-            assert!(tables.contains(&expected.to_string()), "缺少表 {expected}: {tables:?}");
+            assert!(
+                tables.contains(&expected.to_string()),
+                "缺少表 {expected}: {tables:?}"
+            );
         }
     }
 
@@ -480,17 +485,27 @@ mod tests {
         assert_eq!(db.count_questions().unwrap(), 0);
         assert_eq!(db.count_answers().unwrap(), 0);
         assert_eq!(db.count_profile_documents().unwrap(), 0);
-        assert_eq!(db.get_setting("provider.kind").unwrap().as_deref(), Some("deepseek"), "设置应保留");
+        assert_eq!(
+            db.get_setting("provider.kind").unwrap().as_deref(),
+            Some("deepseek"),
+            "设置应保留"
+        );
     }
 
     #[test]
     fn settings_roundtrip_and_upsert() {
         let db = mem_db();
         db.set_setting("retention.days", "7").unwrap();
-        assert_eq!(db.get_setting("retention.days").unwrap().as_deref(), Some("7"));
+        assert_eq!(
+            db.get_setting("retention.days").unwrap().as_deref(),
+            Some("7")
+        );
         assert_eq!(db.get_setting("missing").unwrap(), None);
         db.set_setting("retention.days", "14").unwrap(); // upsert
-        assert_eq!(db.get_setting("retention.days").unwrap().as_deref(), Some("14"));
+        assert_eq!(
+            db.get_setting("retention.days").unwrap().as_deref(),
+            Some("14")
+        );
         let all = db.all_settings().unwrap();
         assert_eq!(all, vec![("retention.days".to_string(), "14".to_string())]);
     }

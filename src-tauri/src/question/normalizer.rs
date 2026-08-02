@@ -22,18 +22,47 @@ pub fn fullwidth_to_halfwidth(text: &str) -> String {
 }
 
 fn is_punct(c: char) -> bool {
-    c.is_ascii_punctuation() || matches!(c, '，' | '。' | '？' | '！' | '：' | '；' | '、' | '（' | '）' | '「' | '」' | '『' | '』' | '·' | '…' | '—' | '‘' | '’' | '“' | '”')
+    c.is_ascii_punctuation()
+        || matches!(
+            c,
+            '，' | '。'
+                | '？'
+                | '！'
+                | '：'
+                | '；'
+                | '、'
+                | '（'
+                | '）'
+                | '「'
+                | '」'
+                | '『'
+                | '』'
+                | '·'
+                | '…'
+                | '—'
+                | '‘'
+                | '’'
+                | '“'
+                | '”'
+        )
 }
 
 /// 去重/匹配用规范化：去除标点、折叠空白、转小写。
 pub fn normalize(text: &str) -> String {
     let half = fullwidth_to_halfwidth(text);
-    let mut s: String = half.chars().filter(|c| !is_punct(*c) && !c.is_whitespace()).collect();
+    let mut s: String = half
+        .chars()
+        .filter(|c| !is_punct(*c) && !c.is_whitespace())
+        .collect();
     if s.is_empty() {
         return s;
     }
     s = s.to_lowercase();
-    s.split_whitespace().collect::<Vec<_>>().join(" ").trim().to_string()
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
 }
 
 #[cfg(test)]
@@ -46,7 +75,10 @@ mod tests {
             normalize("What was the hardest problem you solved?"),
             "whatwasthehardestproblemyousolved"
         );
-        assert_eq!(normalize("请介绍一下你负责的项目？"), "请介绍一下你负责的项目");
+        assert_eq!(
+            normalize("请介绍一下你负责的项目？"),
+            "请介绍一下你负责的项目"
+        );
     }
 
     #[test]

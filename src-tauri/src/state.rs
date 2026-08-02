@@ -13,7 +13,9 @@ pub enum SessionState {
     Capturing,
     Stopping,
     #[allow(dead_code)]
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -23,7 +25,10 @@ pub enum SessionError {
     #[error("session is not running")]
     NotRunning,
     #[error("invalid transition from {from:?} to {to}")]
-    InvalidTransition { from: SessionState, to: &'static str },
+    InvalidTransition {
+        from: SessionState,
+        to: &'static str,
+    },
 }
 
 /// 运行中会话的句柄：控制信号 + 后台任务。

@@ -88,7 +88,9 @@ fn main() {
     let _ = handle.join();
 
     // 4) 真实转写验证（zh fixture）
-    let (_, pcm) = match meeting_ai_assistant_lib::asr::whisper_worker::read_wav_pcm16(&fixture_path("zh_question.wav")) {
+    let (_, pcm) = match meeting_ai_assistant_lib::asr::whisper_worker::read_wav_pcm16(
+        &fixture_path("zh_question.wav"),
+    ) {
         Ok(v) => v,
         Err(e) => {
             println!("fixture     : FAIL -> {e}");

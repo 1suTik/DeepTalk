@@ -304,31 +304,39 @@ mod tests {
         let models = crate::asr::model_manager::default_models_dir();
         let silero_path = crate::vad::silero_model_path(&models);
         // 诊断：打印模型输入/输出名
-        let session =
-            ort::session::Session::builder().expect("builder").commit_from_file(&silero_path).expect("session");
-        let inputs: Vec<String> = session.inputs().iter().map(|i| i.name().to_string()).collect();
-        let outputs: Vec<String> = session.outputs().iter().map(|o| o.name().to_string()).collect();
+        let session = ort::session::Session::builder()
+            .expect("builder")
+            .commit_from_file(&silero_path)
+            .expect("session");
+        let inputs: Vec<String> = session
+            .inputs()
+            .iter()
+            .map(|i| i.name().to_string())
+            .collect();
+        let outputs: Vec<String> = session
+            .outputs()
+            .iter()
+            .map(|o| o.name().to_string())
+            .collect();
         eprintln!("[diag] inputs={inputs:?} outputs={outputs:?}");
         let mut silero = SileroVad::new(&silero_path).expect("silero onnx");
-        let worker =
-            WhisperWorker::new(&RealPipeline::find_model().expect("whisper model")).expect("worker");
+        let worker = WhisperWorker::new(&RealPipeline::find_model().expect("whisper model"))
+            .expect("worker");
         eprintln!("backend: {:?}", worker.backend);
         let (_, pcm) = read_wav_pcm16(&fixture_path("zh_question.wav")).expect("fixture");
         let mut segs = Segmenters::new();
         let (tx, rx) = mpsc::channel(64);
         let mut rx = rx;
-        let mut packet = 0u64;
-        for chunk in pcm.chunks(160) {
+        for (packet, chunk) in pcm.chunks(160).enumerate() {
             if chunk.len() < 160 {
                 break;
             }
             let frame = AudioFrame {
                 source: AudioSource::System,
                 samples_16khz_mono: chunk.to_vec(),
-                captured_at_ms: packet * 10,
+                captured_at_ms: packet as u64 * 10,
             };
             process_frame(&frame, &mut silero, &mut segs, &worker, &tx);
-            packet += 1;
         }
         let mut events: Vec<PipelineEvent> = Vec::new();
         while let Ok(ev) = rx.try_recv() {

@@ -62,8 +62,8 @@ pub fn extract(path: &Path) -> Result<ExtractedDocument, ExtractError> {
     if meta.len() > MAX_DOC_SIZE {
         return Err(ExtractError::TooLarge(meta.len()));
     }
-    let kind = detect_kind(path)
-        .ok_or_else(|| ExtractError::Unsupported(path.display().to_string()))?;
+    let kind =
+        detect_kind(path).ok_or_else(|| ExtractError::Unsupported(path.display().to_string()))?;
     let (title, paragraphs) = match kind {
         DocumentKind::Pdf => extract_pdf(path)?,
         DocumentKind::Docx => extract_docx(path)?,
@@ -113,10 +113,7 @@ fn extract_plain(path: &Path, markdown: bool) -> Result<(String, Vec<String>), E
         if markdown {
             let is_heading = para.trim_start().starts_with('#');
             let cleaned = normalize_text(para);
-            let stripped = cleaned
-                .trim_start_matches('#')
-                .trim_start()
-                .to_string();
+            let stripped = cleaned.trim_start_matches('#').trim_start().to_string();
             if stripped.is_empty() {
                 continue;
             }
@@ -184,8 +181,7 @@ fn extract_pdf(path: &Path) -> Result<(String, Vec<String>), ExtractError> {
 
 fn extract_docx(path: &Path) -> Result<(String, Vec<String>), ExtractError> {
     let file = std::fs::File::open(path)?;
-    let mut archive =
-        zip::ZipArchive::new(file).map_err(|e| ExtractError::Docx(e.to_string()))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| ExtractError::Docx(e.to_string()))?;
     if archive.len() > 200 {
         return Err(ExtractError::Docx("too many entries".into()));
     }
@@ -224,20 +220,16 @@ fn parse_docx_xml(xml: &[u8]) -> Result<(String, Vec<String>), ExtractError> {
     let mut title = String::new();
     loop {
         match reader.read_event() {
-            Ok(Event::Start(e)) => {
-                match e.local_name().as_ref() {
-                    b"p" => {
-                        in_paragraph = true;
-                        current.clear();
-                    }
-                    b"tab" => {
-                        if in_paragraph {
-                            current.push(' ');
-                        }
-                    }
-                    _ => {}
+            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+                b"p" => {
+                    in_paragraph = true;
+                    current.clear();
                 }
-            }
+                b"tab" if in_paragraph => {
+                    current.push(' ');
+                }
+                _ => {}
+            },
             Ok(Event::End(e)) => {
                 if e.local_name().as_ref() == b"p" && in_paragraph {
                     let cleaned = normalize_text(&current);
@@ -291,7 +283,10 @@ mod tests {
         assert_eq!(detect_kind(Path::new("a.docx")), Some(DocumentKind::Docx));
         assert_eq!(detect_kind(Path::new("a.txt")), Some(DocumentKind::Text));
         assert_eq!(detect_kind(Path::new("a.md")), Some(DocumentKind::Markdown));
-        assert_eq!(detect_kind(Path::new("a.markdown")), Some(DocumentKind::Markdown));
+        assert_eq!(
+            detect_kind(Path::new("a.markdown")),
+            Some(DocumentKind::Markdown)
+        );
         assert_eq!(detect_kind(Path::new("a.exe")), None);
         assert_eq!(detect_kind(Path::new("noextension")), None);
     }
@@ -313,7 +308,10 @@ mod tests {
         assert_eq!(doc.title, "会议助手项目简介");
         assert!(doc.paragraphs.iter().any(|p| p.contains("WASAPI")));
         assert!(doc.text.contains("Whisper large-v3-turbo"));
-        assert!(!doc.text.contains("example.com"), "external rels must not be followed");
+        assert!(
+            !doc.text.contains("example.com"),
+            "external rels must not be followed"
+        );
     }
 
     #[test]
@@ -345,7 +343,10 @@ mod tests {
 
     #[test]
     fn txt_with_control_chars_is_normalized() {
-        let p = temp_file("ctrl.txt", b"line one\x00\x01\x02  \t  line two\n\n  spaced  \n");
+        let p = temp_file(
+            "ctrl.txt",
+            b"line one\x00\x01\x02  \t  line two\n\n  spaced  \n",
+        );
         let doc = extract(&p).unwrap();
         assert!(doc.text.contains("line one"));
         assert!(doc.text.contains("line two"));

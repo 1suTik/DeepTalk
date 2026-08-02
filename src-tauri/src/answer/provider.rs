@@ -161,10 +161,7 @@ pub trait AnswerProvider: Send + Sync {
         &'a self,
         request: AnswerRequest,
         cancel: CancellationToken,
-    ) -> futures_util::future::BoxFuture<
-        'a,
-        Result<mpsc::Receiver<AnswerEvent>, AnswerError>,
-    >;
+    ) -> futures_util::future::BoxFuture<'a, Result<mpsc::Receiver<AnswerEvent>, AnswerError>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -458,7 +455,10 @@ impl SectionAccumulator {
     ) -> Result<(), AnswerError> {
         let trimmed = line.trim();
         if self.degraded {
-            if !matches!(trimmed, MARKER_SHORT_ANSWER | MARKER_KEY_POINTS | MARKER_FOLLOW_UPS) {
+            if !matches!(
+                trimmed,
+                MARKER_SHORT_ANSWER | MARKER_KEY_POINTS | MARKER_FOLLOW_UPS
+            ) {
                 self.key_points.push(trimmed.to_string());
             }
             return Ok(());
@@ -479,8 +479,7 @@ impl SectionAccumulator {
                     } else {
                         line.trim_end().to_string()
                     };
-                    send_content(tx, AnswerEvent::ShortAnswerDelta(delta), cancel, emitted)
-                        .await?;
+                    send_content(tx, AnswerEvent::ShortAnswerDelta(delta), cancel, emitted).await?;
                 }
                 Section::KeyPoints => self.key_points.push(strip_bullet(trimmed)),
                 Section::FollowUps => self.follow_ups.push(strip_bullet(trimmed)),
@@ -724,11 +723,8 @@ mod tests {
     /// 收集事件直到通道关闭或等待超时。
     async fn collect(rx: &mut mpsc::Receiver<AnswerEvent>, wait: Duration) -> Vec<AnswerEvent> {
         let mut out = Vec::new();
-        loop {
-            match tokio::time::timeout(wait, rx.recv()).await {
-                Ok(Some(ev)) => out.push(ev),
-                Ok(None) | Err(_) => break,
-            }
+        while let Ok(Some(ev)) = tokio::time::timeout(wait, rx.recv()).await {
+            out.push(ev);
         }
         out
     }
@@ -765,7 +761,9 @@ mod tests {
             "[追问]",
             "- 追问一",
         ] {
-            acc.push_line(line, &tx, &cancel, &mut emitted).await.unwrap();
+            acc.push_line(line, &tx, &cancel, &mut emitted)
+                .await
+                .unwrap();
         }
         acc.finish(&tx, &cancel, &mut emitted).await.unwrap();
         drop(tx);
@@ -792,10 +790,16 @@ mod tests {
         let cancel = CancellationToken::new();
         let mut acc = SectionAccumulator::new();
         let mut emitted = false;
-        acc.push_line("短答内容", &tx, &cancel, &mut emitted).await.unwrap();
+        acc.push_line("短答内容", &tx, &cancel, &mut emitted)
+            .await
+            .unwrap();
         acc.degrade();
-        acc.push_line("[要点]", &tx, &cancel, &mut emitted).await.unwrap();
-        acc.push_line("普通降级行", &tx, &cancel, &mut emitted).await.unwrap();
+        acc.push_line("[要点]", &tx, &cancel, &mut emitted)
+            .await
+            .unwrap();
+        acc.push_line("普通降级行", &tx, &cancel, &mut emitted)
+            .await
+            .unwrap();
         acc.finish(&tx, &cancel, &mut emitted).await.unwrap();
         drop(tx);
         let events: Vec<AnswerEvent> = {
@@ -833,7 +837,10 @@ mod tests {
         .await;
         let client = client_for(server.url(), ApiStyle::ChatCompletions);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert_eq!(events.first(), Some(&AnswerEvent::Started));
         assert_eq!(events[1], AnswerEvent::ShortAnswerDelta("你好，".into()));
@@ -842,7 +849,10 @@ mod tests {
             AnswerEvent::ShortAnswerDelta("我负责音频采集模块。".into())
         );
         assert!(
-            events.contains(&AnswerEvent::KeyPoints(vec!["低延迟采集".into(), "独立声道".into()])),
+            events.contains(&AnswerEvent::KeyPoints(vec![
+                "低延迟采集".into(),
+                "独立声道".into()
+            ])),
             "events: {events:?}"
         );
         assert!(events.contains(&AnswerEvent::FollowUps(vec!["如何优化延迟？".into()])));
@@ -858,16 +868,24 @@ mod tests {
         part2.extend_from_slice(br#""}}]}"#);
         part2.extend_from_slice(b"\n\ndata: [DONE]\n\n");
         let server = MockServer::start(move |_| {
-            let mut resp = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n".to_vec();
+            let mut resp =
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n"
+                    .to_vec();
             resp.extend_from_slice(&part1);
             vec![resp, part2.clone()]
         })
         .await;
         let client = client_for(server.url(), ApiStyle::ChatCompletions);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
-        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("你好".into())), "events: {events:?}");
+        assert!(
+            events.contains(&AnswerEvent::ShortAnswerDelta("你好".into())),
+            "events: {events:?}"
+        );
         assert_eq!(events.last(), Some(&AnswerEvent::Completed));
     }
 
@@ -876,7 +894,10 @@ mod tests {
         let server = MockServer::start(|_| one(json_error(401, "invalid api key"))).await;
         let client = client_for(server.url(), ApiStyle::ChatCompletions);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert_eq!(server.hits.load(Ordering::SeqCst), 1, "认证失败不得重试");
         match events.last() {
@@ -891,7 +912,10 @@ mod tests {
         let server = MockServer::start(move |_| one(resp.clone())).await;
         let client = client_for(server.url(), ApiStyle::ChatCompletions);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert_eq!(server.hits.load(Ordering::SeqCst), 1, "限流不得重试");
         match events.last() {
@@ -904,12 +928,20 @@ mod tests {
     async fn retries_once_when_stream_cut_before_content() {
         let cut = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\nda".to_vec();
         let full = chat_sse(&["你好", "[要点]", "- 要点一", "[追问]", "- 追问一"]);
-        let server =
-            MockServer::start(move |hit| if hit == 1 { one(cut.clone()) } else { one(full.clone()) })
-                .await;
+        let server = MockServer::start(move |hit| {
+            if hit == 1 {
+                one(cut.clone())
+            } else {
+                one(full.clone())
+            }
+        })
+        .await;
         let client = client_for(server.url(), ApiStyle::ChatCompletions);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert_eq!(server.hits.load(Ordering::SeqCst), 2, "网络中断应重试一次");
         let deltas: Vec<String> = events
@@ -931,7 +963,10 @@ mod tests {
         let server = MockServer::start(move |_| one(cut.clone())).await;
         let client = client_for(server.url(), ApiStyle::ChatCompletions);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert_eq!(server.hits.load(Ordering::SeqCst), 1);
         // 已收到内容则按成功结束，保留内容
@@ -941,9 +976,13 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_stops_further_events() {
-        let chunks = vec![
-            "data: {\"choices\":[{\"delta\":{\"content\":\"第一段\"}}]}\n\n".as_bytes().to_vec(),
-            "data: {\"choices\":[{\"delta\":{\"content\":\"第二段\"}}]}\n\n".as_bytes().to_vec(),
+        let chunks = [
+            "data: {\"choices\":[{\"delta\":{\"content\":\"第一段\"}}]}\n\n"
+                .as_bytes()
+                .to_vec(),
+            "data: {\"choices\":[{\"delta\":{\"content\":\"第二段\"}}]}\n\n"
+                .as_bytes()
+                .to_vec(),
             b"data: [DONE]\n\n".to_vec(),
         ];
         let server = MockServer::start(move |_| {
@@ -956,7 +995,10 @@ mod tests {
         .await;
         let client = client_for(server.url(), ApiStyle::ChatCompletions);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel.clone()).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel.clone())
+            .await
+            .unwrap();
         assert_eq!(rx.recv().await, Some(AnswerEvent::Started));
         assert_eq!(
             rx.recv().await,
@@ -970,11 +1012,15 @@ mod tests {
     #[tokio::test]
     async fn total_timeout_fires_when_server_never_responds() {
         let server = MockServer::start(|_| Vec::new()).await;
-        let mut cfg = AnswerConfig::new(ProviderKind::Custom, server.url(), "test-model", "test-key");
+        let mut cfg =
+            AnswerConfig::new(ProviderKind::Custom, server.url(), "test-model", "test-key");
         cfg.total_timeout = Duration::from_millis(400);
         let client = OpenAiCompatibleClient::new(cfg, ApiStyle::ChatCompletions).unwrap();
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(3)).await;
         assert_eq!(events.first(), Some(&AnswerEvent::Started));
         match events.last() {
@@ -985,13 +1031,26 @@ mod tests {
 
     #[tokio::test]
     async fn openai_responses_api_style_streams_deltas() {
-        let server = MockServer::start(|_| one(responses_sse(&["你好", "，这是 Responses API", "[要点]", "- 要点一"]))).await;
+        let server = MockServer::start(|_| {
+            one(responses_sse(&[
+                "你好",
+                "，这是 Responses API",
+                "[要点]",
+                "- 要点一",
+            ]))
+        })
+        .await;
         let client = client_for(server.url(), ApiStyle::Responses);
         let cancel = CancellationToken::new();
-        let mut rx = client.stream_answer(sample_request(), cancel).await.unwrap();
+        let mut rx = client
+            .stream_answer(sample_request(), cancel)
+            .await
+            .unwrap();
         let events = collect(&mut rx, Duration::from_secs(2)).await;
         assert!(events.contains(&AnswerEvent::ShortAnswerDelta("你好".into())));
-        assert!(events.contains(&AnswerEvent::ShortAnswerDelta("，这是 Responses API".into())));
+        assert!(events.contains(&AnswerEvent::ShortAnswerDelta(
+            "，这是 Responses API".into()
+        )));
         assert!(events.contains(&AnswerEvent::KeyPoints(vec!["要点一".into()])));
         assert_eq!(events.last(), Some(&AnswerEvent::Completed));
     }

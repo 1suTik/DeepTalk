@@ -42,8 +42,10 @@ impl SileroVad {
     /// 输入 16kHz 单声道 f32 帧（建议 512 样本 ≈ 32ms），返回语音概率。
     pub fn classify(&mut self, frame: &[f32]) -> Result<f32, SileroError> {
         let input = Tensor::from_array(([1usize, frame.len()], frame.to_vec().into_boxed_slice()))?;
-        let state =
-            Tensor::from_array(([2usize, 1, STATE_SIZE], self.state.clone().into_boxed_slice()))?;
+        let state = Tensor::from_array((
+            [2usize, 1, STATE_SIZE],
+            self.state.clone().into_boxed_slice(),
+        ))?;
         let sr = Tensor::from_array(ndarray::arr0(SAMPLE_RATE))?;
         let outputs = self.session.run([input.into(), state.into(), sr.into()])?;
         let prob = outputs[0].try_extract_tensor::<f32>()?;

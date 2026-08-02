@@ -9,17 +9,43 @@ use crate::question::normalizer;
 
 const ZN_PARTICLES: &[&str] = &["吗", "呢", "吧"];
 const ZN_QUESTION_WORDS: &[&str] = &[
-    "为什么", "怎么", "如何", "什么", "多少", "是否", "能否", "哪些", "哪里", "谁", "多久", "几",
+    "为什么",
+    "怎么",
+    "如何",
+    "什么",
+    "多少",
+    "是否",
+    "能否",
+    "哪些",
+    "哪里",
+    "谁",
+    "多久",
+    "几",
 ];
 const ZN_IMPERATIVE: &[&str] = &[
-    "请介绍", "介绍一下", "介绍下", "谈谈", "说说", "讲讲", "解释", "举例", "说明", "描述",
+    "请介绍",
+    "介绍一下",
+    "介绍下",
+    "谈谈",
+    "说说",
+    "讲讲",
+    "解释",
+    "举例",
+    "说明",
+    "描述",
 ];
 const EN_QUESTION_STARTS: &[&str] = &[
-    "who", "what", "when", "where", "why", "how", "which", "does", "do", "did", "is", "are",
-    "was", "were", "can", "could", "should", "would", "will", "have", "has",
+    "who", "what", "when", "where", "why", "how", "which", "does", "do", "did", "is", "are", "was",
+    "were", "can", "could", "should", "would", "will", "have", "has",
 ];
 const EN_IMPERATIVE: &[&str] = &[
-    "describe", "explain", "tell me", "elaborate", "what about", "how about", "walk me through",
+    "describe",
+    "explain",
+    "tell me",
+    "elaborate",
+    "what about",
+    "how about",
+    "walk me through",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,7 +166,8 @@ impl QuestionDetector {
                 return;
             }
         }
-        self.recent.push_back((text.trim().to_string(), start_ms, end_ms));
+        self.recent
+            .push_back((text.trim().to_string(), start_ms, end_ms));
     }
 
     /// 合并后的最近窗口文本（供全局快捷键手动提交）。
@@ -284,7 +311,7 @@ mod tests {
         assert!(auto >= 0.65, "imperative must be auto band: {auto}");
         let maybe = classify("the hardest part is the latency?").unwrap();
         assert!(
-            maybe >= 0.40 && maybe < 0.65,
+            (0.40..0.65).contains(&maybe),
             "bare question mark must be maybe band: {maybe}"
         );
     }
@@ -305,7 +332,10 @@ mod tests {
         d.push_final("请介绍一下你负责的项目", 0, 1000);
         assert!(d.check(2000).is_some());
         d.push_final("请介绍一下你负责的项目", 5000, 6000);
-        assert!(d.check(7000).is_none(), "duplicate within 30s must be suppressed");
+        assert!(
+            d.check(7000).is_none(),
+            "duplicate within 30s must be suppressed"
+        );
         d.push_final("请介绍一下你负责的项目", 40_000, 41_000);
         let q = d.check(42_000);
         assert!(q.is_some(), "after 30s the same question may trigger again");
@@ -319,7 +349,10 @@ mod tests {
         assert!(d.check(2000).is_some(), "first fragment triggers");
         d.push_final("项目", 3000, 4000);
         // 与最近触发的问题互为前缀续接 → 视为重复，不再触发第二段
-        assert!(d.check(5000).is_none(), "split continuation must be suppressed");
+        assert!(
+            d.check(5000).is_none(),
+            "split continuation must be suppressed"
+        );
     }
 
     #[test]
@@ -329,14 +362,26 @@ mod tests {
         assert!(d.check(2000).is_some());
         // 完全不同的问题不受影响
         d.push_final("那项目的音频延迟怎么优化", 6000, 7000);
-        assert!(d.check(8000).is_some(), "different question must still trigger");
+        assert!(
+            d.check(8000).is_some(),
+            "different question must still trigger"
+        );
     }
 
     #[test]
     fn prefix_overlap_helpers() {
-        assert!(prefix_overlap("请介绍一下你负责的", "请介绍一下你负责的项目"));
-        assert!(prefix_overlap("请介绍一下你负责的项目", "请介绍一下你负责的"));
-        assert!(!prefix_overlap("请介绍一下你负责的项目", "那项目的音频延迟怎么优化"));
+        assert!(prefix_overlap(
+            "请介绍一下你负责的",
+            "请介绍一下你负责的项目"
+        ));
+        assert!(prefix_overlap(
+            "请介绍一下你负责的项目",
+            "请介绍一下你负责的"
+        ));
+        assert!(!prefix_overlap(
+            "请介绍一下你负责的项目",
+            "那项目的音频延迟怎么优化"
+        ));
         // 超过 20 字符的续接不算（避免误杀较长的新问题）
         assert!(!prefix_overlap(
             "请介绍一下",

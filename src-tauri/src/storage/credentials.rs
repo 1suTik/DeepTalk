@@ -17,6 +17,12 @@ pub enum CredError {
 
 pub struct CredentialStore;
 
+impl Default for CredentialStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CredentialStore {
     pub fn new() -> Self {
         Self
@@ -59,7 +65,10 @@ mod tests {
         let store = CredentialStore::new();
         let account = format!("api-key:test-{}", std::process::id());
         store.set(&account, "sk-test-secret").unwrap();
-        assert_eq!(store.get(&account).unwrap().as_deref(), Some("sk-test-secret"));
+        assert_eq!(
+            store.get(&account).unwrap().as_deref(),
+            Some("sk-test-secret")
+        );
         store.delete(&account).unwrap();
         assert_eq!(store.get(&account).unwrap(), None);
     }

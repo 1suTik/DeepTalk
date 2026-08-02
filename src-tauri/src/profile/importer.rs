@@ -32,7 +32,9 @@ const PROFILES_FILE: &str = "profiles.json";
 
 pub fn default_profiles_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-    PathBuf::from(base).join("MeetingAIAssistant").join("profiles")
+    PathBuf::from(base)
+        .join("MeetingAIAssistant")
+        .join("profiles")
 }
 
 pub struct ProfileImporter {
@@ -57,14 +59,9 @@ impl ProfileImporter {
     /// 同一原文件路径重复导入时直接返回已有记录。
     pub fn import(&mut self, path: &Path) -> Result<ImportedProfile, ImportError> {
         let mut profiles = self.list()?;
-        let canonical = path
-            .canonicalize()
-            .unwrap_or_else(|_| path.to_path_buf());
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let canonical_str = canonical.display().to_string();
-        if let Some(existing) = profiles
-            .iter()
-            .find(|p| p.original_path == canonical_str)
-        {
+        if let Some(existing) = profiles.iter().find(|p| p.original_path == canonical_str) {
             return Ok(existing.clone());
         }
         if profiles.len() >= MAX_DOCS {
@@ -106,10 +103,7 @@ impl ProfileImporter {
             Ok(()) => Ok(()),
             Err(_) => {
                 let _ = fs::remove_file(&tmp);
-                Err(ImportError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "rename failed",
-                )))
+                Err(ImportError::Io(std::io::Error::other("rename failed")))
             }
         }
     }

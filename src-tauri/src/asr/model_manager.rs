@@ -59,7 +59,11 @@ pub enum ModelError {
         actual: String,
     },
     #[error("file size mismatch for {path}: expected {expected}, got {actual}")]
-    SizeMismatch { path: String, expected: u64, actual: u64 },
+    SizeMismatch {
+        path: String,
+        expected: u64,
+        actual: u64,
+    },
     #[error("download failed: {0}")]
     Http(String),
     #[error("io error: {0}")]
@@ -70,7 +74,9 @@ pub enum ModelError {
 
 pub fn default_models_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-    PathBuf::from(base).join("MeetingAIAssistant").join("models")
+    PathBuf::from(base)
+        .join("MeetingAIAssistant")
+        .join("models")
 }
 
 pub fn load_manifest() -> Result<ModelManifest, ModelError> {
@@ -176,17 +182,17 @@ impl ModelManager {
         }
         let sha = sha256_file(source)?;
         let size = fs::metadata(source)?.len();
-        let matched = self
-            .manifest
-            .models
-            .iter()
-            .find(|e| e.size_bytes == size || (!e.sha256.is_empty() && e.sha256.eq_ignore_ascii_case(&sha)));
+        let matched = self.manifest.models.iter().find(|e| {
+            e.size_bytes == size || (!e.sha256.is_empty() && e.sha256.eq_ignore_ascii_case(&sha))
+        });
         let id = matched
             .map(|e| e.id.clone())
             .unwrap_or_else(|| file_stem(source));
         let file_name = format!("{id}.bin");
 
-        let tmp = self.models_dir.join(format!("{file_name}.tmp-{}", std::process::id()));
+        let tmp = self
+            .models_dir
+            .join(format!("{file_name}.tmp-{}", std::process::id()));
         let final_path = self.models_dir.join(&file_name);
         fs::copy(source, &tmp)?;
         self.atomic_replace(&tmp, &final_path)?;
@@ -241,16 +247,22 @@ impl ModelManager {
             Ok(()) => Ok(()),
             Err(_) => {
                 let _ = fs::remove_file(tmp);
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("atomic rename failed: {} -> {}", tmp.display(), dest.display()),
-                ))
+                Err(std::io::Error::other(format!(
+                    "atomic rename failed: {} -> {}",
+                    tmp.display(),
+                    dest.display()
+                )))
             }
         }
     }
 
     /// 断点续传下载：已存在部分文件时发送 Range 请求续传，完成后校验大小。
-    pub fn download_with_resume(&self, url: &str, dest: &Path, expected_size: u64) -> Result<(), ModelError> {
+    pub fn download_with_resume(
+        &self,
+        url: &str,
+        dest: &Path,
+        expected_size: u64,
+    ) -> Result<(), ModelError> {
         let existing = fs::metadata(dest).map(|m| m.len()).unwrap_or(0);
         if existing >= expected_size {
             return Ok(());
@@ -261,7 +273,10 @@ impl ModelManager {
             req = req.header(reqwest::header::RANGE, format!("bytes={existing}-"));
         }
         let mut resp = req.send().map_err(|e| ModelError::Http(e.to_string()))?;
-        let mut out = fs::OpenOptions::new().create(true).append(true).open(dest)?;
+        let mut out = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dest)?;
         std::io::copy(&mut resp, &mut out)?;
         let len = fs::metadata(dest)?.len();
         if len != expected_size {
@@ -322,8 +337,11 @@ mod tests {
         let dir = temp_dir("hash");
         let f = dir.join("data.bin");
         write_file(&f, b"hello model");
-        let err = verify_sha256(&f, "0000000000000000000000000000000000000000000000000000000000000000")
-            .unwrap_err();
+        let err = verify_sha256(
+            &f,
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap_err();
         assert!(matches!(err, ModelError::Sha256Mismatch { .. }));
     }
 
@@ -391,8 +409,9 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let handle = thread::spawn(move || {
-            for stream in listener.incoming() {
-                let mut stream = stream.unwrap();
+            #[allow(clippy::never_loop)] // 断点续传测试需要接受多个连接
+            for stream in listener.incoming().flatten() {
+                let mut stream = stream;
                 let mut buf = [0u8; 8192];
                 let n = stream.read(&mut buf).unwrap();
                 let req = String::from_utf8_lossy(&buf[..n]);
@@ -449,8 +468,9 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let handle = thread::spawn(move || {
-            for stream in listener.incoming() {
-                let mut stream = stream.unwrap();
+            #[allow(clippy::never_loop)] // 断点续传测试需要接受多个连接
+            for stream in listener.incoming().flatten() {
+                let mut stream = stream;
                 let mut buf = [0u8; 8192];
                 let _ = stream.read(&mut buf).unwrap();
                 let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nshort");

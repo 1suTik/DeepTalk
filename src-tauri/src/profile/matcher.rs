@@ -233,7 +233,10 @@ mod tests {
         m.set_docs(vec![project_doc(), unrelated_doc()]);
         let results = m.match_chunks("音频延迟优化");
         assert!(!results.is_empty());
-        assert_eq!(results[0].doc_id, "proj", "audio latency question must hit the project doc");
+        assert_eq!(
+            results[0].doc_id, "proj",
+            "audio latency question must hit the project doc"
+        );
     }
 
     #[test]
@@ -252,7 +255,10 @@ mod tests {
         let results = m.match_chunks("音频 VAD Whisper WASAPI 转写");
         assert!(results.len() <= MAX_CHUNKS);
         let total: usize = results.iter().map(|r| r.chunk_text.chars().count()).sum();
-        assert!(total <= MAX_TOTAL_CHARS, "total {total} exceeds {MAX_TOTAL_CHARS}");
+        assert!(
+            total <= MAX_TOTAL_CHARS,
+            "total {total} exceeds {MAX_TOTAL_CHARS}"
+        );
     }
 
     #[test]

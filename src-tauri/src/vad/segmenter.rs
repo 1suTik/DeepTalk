@@ -66,7 +66,8 @@ impl VadSegmenter {
             pre_roll_samples: (sample_rate as u64 * config.pre_roll_ms as u64 / 1000) as usize,
             speech_start_frames: config.speech_start_ms / config.frame_ms,
             silence_end_frames: config.silence_end_ms / config.frame_ms,
-            max_segment_samples: (sample_rate as u64 * config.max_segment_ms as u64 / 1000) as usize,
+            max_segment_samples: (sample_rate as u64 * config.max_segment_ms as u64 / 1000)
+                as usize,
             state: SegState::Silence,
             pre_roll: VecDeque::with_capacity(64),
             segment: Vec::new(),
@@ -106,7 +107,9 @@ impl VadSegmenter {
                 }
                 let too_long = self.segment.len() >= self.max_segment_samples;
                 if self.silence_run >= self.silence_end_frames || too_long {
-                    events.push(SegmentEvent::SegmentCompleted(std::mem::take(&mut self.segment)));
+                    events.push(SegmentEvent::SegmentCompleted(std::mem::take(
+                        &mut self.segment,
+                    )));
                     self.end_segment();
                 }
             }
@@ -139,12 +142,14 @@ mod tests {
     use super::*;
 
     fn frames(n: u32, sample: i16) -> Vec<Vec<i16>> {
-        (0..n)
-            .map(|_| vec![sample; 480])
-            .collect::<Vec<_>>()
+        (0..n).map(|_| vec![sample; 480]).collect::<Vec<_>>()
     }
 
-    fn feed_all(seg: &mut VadSegmenter, probs: &[f32], frames_in: &[Vec<i16>]) -> Vec<SegmentEvent> {
+    fn feed_all(
+        seg: &mut VadSegmenter,
+        probs: &[f32],
+        frames_in: &[Vec<i16>],
+    ) -> Vec<SegmentEvent> {
         let mut events = Vec::new();
         for (p, f) in probs.iter().zip(frames_in) {
             events.extend(seg.feed(*p, f));

@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tokio::sync::mpsc;
 use tauri::Emitter;
+use tokio::sync::mpsc;
 
 use crate::answer::{AnswerEvent, AnswerProvider, AnswerRequest, CancellationToken};
 use crate::profile::importer::{default_profiles_dir, ProfileImporter};
@@ -79,13 +79,28 @@ pub struct AnswerInfo {
 
 #[derive(Debug, Clone)]
 pub enum OrchestrationEvent {
-    CaptureState { source: String, active: bool, at_ms: u64 },
-    AudioLevel { source: String, rms: f32, peak: f32, at_ms: u64 },
+    CaptureState {
+        source: String,
+        active: bool,
+        at_ms: u64,
+    },
+    AudioLevel {
+        source: String,
+        rms: f32,
+        peak: f32,
+        at_ms: u64,
+    },
     TranscriptPending(TranscriptInfo),
     TranscriptFinal(TranscriptInfo),
     QuestionDetected(QuestionInfo),
-    AnswerStarted { question_id: String, at_ms: u64 },
-    AnswerDelta { question_id: String, delta: String },
+    AnswerStarted {
+        question_id: String,
+        at_ms: u64,
+    },
+    AnswerDelta {
+        question_id: String,
+        delta: String,
+    },
     AnswerCompleted(AnswerInfo),
 }
 
@@ -248,12 +263,11 @@ impl Orchestrator {
             .take()
             .expect("run 只能执行一次");
         let now = (self.now)();
-        self.sink
-            .emit(&OrchestrationEvent::CaptureState {
-                source: "system".into(),
-                active: true,
-                at_ms: now,
-            });
+        self.sink.emit(&OrchestrationEvent::CaptureState {
+            source: "system".into(),
+            active: true,
+            at_ms: now,
+        });
         loop {
             tokio::select! {
                 _ = self.stop.cancelled() => break,
@@ -281,12 +295,11 @@ impl Orchestrator {
         }
         self.source.stop();
         let _ = self.db.end_meeting(&self.meeting_id, (self.now)());
-        self.sink
-            .emit(&OrchestrationEvent::CaptureState {
-                source: "system".into(),
-                active: false,
-                at_ms: (self.now)(),
-            });
+        self.sink.emit(&OrchestrationEvent::CaptureState {
+            source: "system".into(),
+            active: false,
+            at_ms: (self.now)(),
+        });
         Ok(())
     }
 
@@ -312,7 +325,8 @@ impl Orchestrator {
                 self.sink.emit(&OrchestrationEvent::TranscriptPending(info));
             }
             PipelineEvent::TranscriptFinal(info) => {
-                self.sink.emit(&OrchestrationEvent::TranscriptFinal(info.clone()));
+                self.sink
+                    .emit(&OrchestrationEvent::TranscriptFinal(info.clone()));
                 let _ = self.db.insert_transcript_segment(
                     &self.meeting_id,
                     &TranscriptRow {
@@ -569,14 +583,15 @@ impl Orchestrator {
                 .map(|act| act.question_id.clone())
                 .unwrap_or_default();
             let now = (self.now)();
-            self.sink.emit(&OrchestrationEvent::AnswerCompleted(AnswerInfo {
-                question_id: qid,
-                short_answer: String::new(),
-                key_points: Vec::new(),
-                follow_ups: Vec::new(),
-                status: "cancelled".into(),
-                created_at_ms: now,
-            }));
+            self.sink
+                .emit(&OrchestrationEvent::AnswerCompleted(AnswerInfo {
+                    question_id: qid,
+                    short_answer: String::new(),
+                    key_points: Vec::new(),
+                    follow_ups: Vec::new(),
+                    status: "cancelled".into(),
+                    created_at_ms: now,
+                }));
         }
     }
 
@@ -672,7 +687,11 @@ impl TauriSink {
 impl EventSink for TauriSink {
     fn emit(&self, ev: &OrchestrationEvent) {
         let result = match ev {
-            OrchestrationEvent::CaptureState { source, active, at_ms } => self.app.emit(
+            OrchestrationEvent::CaptureState {
+                source,
+                active,
+                at_ms,
+            } => self.app.emit(
                 "capture-state",
                 CaptureStatePayload {
                     source: source.clone(),
@@ -680,7 +699,12 @@ impl EventSink for TauriSink {
                     at_ms: *at_ms,
                 },
             ),
-            OrchestrationEvent::AudioLevel { source, rms, peak, at_ms } => self.app.emit(
+            OrchestrationEvent::AudioLevel {
+                source,
+                rms,
+                peak,
+                at_ms,
+            } => self.app.emit(
                 "audio-level",
                 AudioLevelPayload {
                     source: source.clone(),
@@ -788,17 +812,15 @@ mod tests {
         fn events(&self) -> mpsc::Receiver<PipelineEvent> {
             let (tx, rx) = mpsc::channel(64);
             let script = self.script.clone();
-            std::thread::spawn(move || {
-                loop {
-                    let ev = script.lock().unwrap().recv();
-                    match ev {
-                        Ok(e) => {
-                            if tx.blocking_send(e).is_err() {
-                                break;
-                            }
+            std::thread::spawn(move || loop {
+                let ev = script.lock().unwrap().recv();
+                match ev {
+                    Ok(e) => {
+                        if tx.blocking_send(e).is_err() {
+                            break;
                         }
-                        Err(_) => break,
                     }
+                    Err(_) => break,
                 }
             });
             rx
@@ -846,10 +868,8 @@ mod tests {
             &'a self,
             _request: AnswerRequest,
             cancel: CancellationToken,
-        ) -> futures_util::future::BoxFuture<
-            'a,
-            Result<mpsc::Receiver<AnswerEvent>, AnswerError>,
-        > {
+        ) -> futures_util::future::BoxFuture<'a, Result<mpsc::Receiver<AnswerEvent>, AnswerError>>
+        {
             Box::pin(async move {
                 let (tx, rx) = mpsc::channel(32);
                 let (script_tx, script_rx) = std_mpsc::channel();
@@ -895,7 +915,11 @@ mod tests {
     fn new_orchestrator(
         source: Arc<FakeSource>,
         provider: Box<dyn AnswerProvider>,
-    ) -> (Orchestrator, SessionControl, std_mpsc::Receiver<OrchestrationEvent>) {
+    ) -> (
+        Orchestrator,
+        SessionControl,
+        std_mpsc::Receiver<OrchestrationEvent>,
+    ) {
         let (sink_tx, sink_rx) = std_mpsc::channel();
         let db = Db::open_in_memory().unwrap();
         db.create_meeting("m1", 1_000).unwrap();
@@ -928,11 +952,8 @@ mod tests {
         deadline: std::time::Duration,
     ) -> Vec<OrchestrationEvent> {
         let mut out = Vec::new();
-        loop {
-            match rx.recv_timeout(deadline) {
-                Ok(ev) => out.push(ev),
-                Err(_) => break,
-            }
+        while let Ok(ev) = rx.recv_timeout(deadline) {
+            out.push(ev);
         }
         out
     }
@@ -970,16 +991,11 @@ mod tests {
         // 等待 question-detected -> answer-started 到达后再放行 provider 脚本
         // （脚本路由到最近注册的请求队列）
         let mut events: Vec<OrchestrationEvent> = Vec::new();
-        loop {
-            match sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
-                Ok(ev) => {
-                    let started = matches!(&ev, OrchestrationEvent::AnswerStarted { .. });
-                    events.push(ev);
-                    if started {
-                        break;
-                    }
-                }
-                Err(_) => break,
+        while let Ok(ev) = sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
+            let started = matches!(&ev, OrchestrationEvent::AnswerStarted { .. });
+            events.push(ev);
+            if started {
+                break;
             }
         }
         prov_tx
@@ -991,16 +1007,15 @@ mod tests {
             )))
             .unwrap();
         prov_tx
-            .send(ProviderScript::Emit(AnswerEvent::KeyPoints(vec!["要点一".into()])))
+            .send(ProviderScript::Emit(AnswerEvent::KeyPoints(vec![
+                "要点一".into()
+            ])))
             .unwrap();
         prov_tx
             .send(ProviderScript::Emit(AnswerEvent::Completed))
             .unwrap();
-        loop {
-            match sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
-                Ok(ev) => events.push(ev),
-                Err(_) => break,
-            }
+        while let Ok(ev) = sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
+            events.push(ev);
         }
 
         let kinds: Vec<&str> = events
@@ -1055,11 +1070,18 @@ mod tests {
         src_tx
             .send(final_event("system", "请介绍一下你负责的项目", 4000, 2500))
             .unwrap();
-        prov_tx.send(ProviderScript::Emit(AnswerEvent::Started)).unwrap();
+        prov_tx
+            .send(ProviderScript::Emit(AnswerEvent::Started))
+            .unwrap();
         // 第二个问题到来时第一个答案仍在生成（脚本挂起）
         std::thread::sleep(std::time::Duration::from_millis(300));
         src_tx
-            .send(final_event("system", "那项目的音频延迟怎么优化的", 2000, 500))
+            .send(final_event(
+                "system",
+                "那项目的音频延迟怎么优化的",
+                2000,
+                500,
+            ))
             .unwrap();
 
         let events = recv_until(&sink_rx, std::time::Duration::from_millis(1200));
@@ -1093,7 +1115,7 @@ mod tests {
             .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(300));
         ctl.pin_current().await; // 固定当前答案
-        // 问题 2 到来 -> 排队（不取消问题 1）
+                                 // 问题 2 到来 -> 排队（不取消问题 1）
         src_tx
             .send(final_event("system", "项目的音频延迟怎么优化", 2000, 500))
             .unwrap();
@@ -1110,16 +1132,11 @@ mod tests {
         // 等待问题 1 的 AnswerCompleted 到达（此时 q1 的 provider 脚本循环已退出，
         // 避免其误食问题 2 的脚本条目）
         let mut all: Vec<OrchestrationEvent> = Vec::new();
-        loop {
-            match sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
-                Ok(ev) => {
-                    let is_completed = matches!(&ev, OrchestrationEvent::AnswerCompleted(_));
-                    all.push(ev);
-                    if is_completed {
-                        break;
-                    }
-                }
-                Err(_) => break,
+        while let Ok(ev) = sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
+            let is_completed = matches!(&ev, OrchestrationEvent::AnswerCompleted(_));
+            all.push(ev);
+            if is_completed {
+                break;
             }
         }
         std::thread::sleep(std::time::Duration::from_millis(400));
@@ -1132,11 +1149,8 @@ mod tests {
         prov_tx
             .send(ProviderScript::Emit(AnswerEvent::Completed))
             .unwrap();
-        loop {
-            match sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
-                Ok(ev) => all.push(ev),
-                Err(_) => break,
-            }
+        while let Ok(ev) = sink_rx.recv_timeout(std::time::Duration::from_millis(1500)) {
+            all.push(ev);
         }
 
         let started: Vec<String> = all
@@ -1176,17 +1190,11 @@ mod tests {
         ctl.stop(); // 停止：取消生成
         std::thread::sleep(std::time::Duration::from_millis(300));
         let _ = run.await.unwrap();
-        assert!(
-            source.stopped.load(Ordering::SeqCst),
-            "流水线应被关闭"
-        );
+        assert!(source.stopped.load(Ordering::SeqCst), "流水线应被关闭");
         let tail = recv_until(&sink_rx, std::time::Duration::from_millis(300));
         assert!(
             tail.last()
-                .map(|e| matches!(
-                    e,
-                    OrchestrationEvent::CaptureState { active: false, .. }
-                ))
+                .map(|e| matches!(e, OrchestrationEvent::CaptureState { active: false, .. }))
                 .unwrap_or(false),
             "停止后应发送采集结束事件"
         );
@@ -1203,14 +1211,19 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(100));
         // "？" 结尾 -> 0.5 置信度 -> Maybe 级别，不自动生成
         src_tx
-            .send(final_event("system", "你们项目遇到最大的困难？", 4000, 2500))
+            .send(final_event(
+                "system",
+                "你们项目遇到最大的困难？",
+                4000,
+                2500,
+            ))
             .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(400));
         let events = recv_until(&sink_rx, std::time::Duration::from_millis(200));
         assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, OrchestrationEvent::QuestionDetected(q) if q.level == "maybe")),
+            events.iter().any(
+                |e| matches!(e, OrchestrationEvent::QuestionDetected(q) if q.level == "maybe")
+            ),
             "应发出 maybe 级别问题: {events:?}"
         );
         assert!(

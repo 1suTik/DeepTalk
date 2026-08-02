@@ -6,11 +6,9 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::answer::{
-    AnswerError, AnswerEvent, AnswerProvider, AnswerRequest, CancellationToken,
-};
-use crate::answer::{
     compatible::CompatibleProvider, deepseek::DeepSeekProvider, openai::OpenAiProvider,
 };
+use crate::answer::{AnswerError, AnswerEvent, AnswerProvider, AnswerRequest, CancellationToken};
 use crate::pipeline::RealPipeline;
 use crate::session::{EventSink, Orchestrator, PipelineSource, TauriSink};
 use crate::state::{SessionHandle, SessionManager, SessionState};
@@ -68,19 +66,17 @@ pub async fn start_session(
         return Err("请先在设置页配置 API Key".into());
     }
     let provider = provider_from_settings(&settings, Some(&api_key)).map_err(|e| e.to_string())?;
-    let pipeline: Arc<dyn PipelineSource> = Arc::new(RealPipeline::new(settings.microphone_enabled));
+    let pipeline: Arc<dyn PipelineSource> =
+        Arc::new(RealPipeline::new(settings.microphone_enabled));
     let started_at_ms = crate::storage::retention::now_ms();
     let meeting_id = format!("meeting-{started_at_ms}");
     manager.start().map_err(|e| format!("{e}"))?;
-    state.db.create_meeting(&meeting_id, started_at_ms).map_err(|e| e.to_string())?;
+    state
+        .db
+        .create_meeting(&meeting_id, started_at_ms)
+        .map_err(|e| e.to_string())?;
     let sink: Arc<dyn EventSink> = Arc::new(TauriSink::new(app.clone()));
-    let (orch, ctl) = Orchestrator::new(
-        pipeline,
-        provider,
-        state.db.clone(),
-        sink,
-        meeting_id,
-    );
+    let (orch, ctl) = Orchestrator::new(pipeline, provider, state.db.clone(), sink, meeting_id);
     orch.load_enabled_profiles();
     let manager2 = manager.inner().clone();
     let task = tokio::spawn(async move {
@@ -97,9 +93,7 @@ pub async fn start_session(
 }
 
 #[tauri::command]
-pub async fn stop_session(
-    manager: State<'_, Arc<SessionManager>>,
-) -> Result<SessionState, String> {
+pub async fn stop_session(manager: State<'_, Arc<SessionManager>>) -> Result<SessionState, String> {
     let Some(handle) = manager.take_handle() else {
         let _ = manager.stop();
         return Ok(manager.state());
@@ -198,7 +192,10 @@ impl AppSettings {
             .unwrap_or(false);
         Self {
             provider_kind,
-            base_url: get("provider.base_url", crate::answer::deepseek::DEEPSEEK_BASE_URL),
+            base_url: get(
+                "provider.base_url",
+                crate::answer::deepseek::DEEPSEEK_BASE_URL,
+            ),
             model: get("provider.model", "deepseek-v4-flash"),
             has_api_key,
             retention_days: get("retention.days", "7").parse().unwrap_or(7),
@@ -207,7 +204,12 @@ impl AppSettings {
         }
     }
 
-    fn save(&self, db: &Db, credentials: &CredentialStore, api_key: Option<&str>) -> Result<(), String> {
+    fn save(
+        &self,
+        db: &Db,
+        credentials: &CredentialStore,
+        api_key: Option<&str>,
+    ) -> Result<(), String> {
         db.set_setting("provider.kind", &self.provider_kind)
             .map_err(|e| e.to_string())?;
         db.set_setting("provider.base_url", &self.base_url)
@@ -216,8 +218,11 @@ impl AppSettings {
             .map_err(|e| e.to_string())?;
         db.set_setting("retention.days", &self.retention_days.to_string())
             .map_err(|e| e.to_string())?;
-        db.set_setting("mic.enabled", if self.microphone_enabled { "1" } else { "0" })
-            .map_err(|e| e.to_string())?;
+        db.set_setting(
+            "mic.enabled",
+            if self.microphone_enabled { "1" } else { "0" },
+        )
+        .map_err(|e| e.to_string())?;
         db.set_setting("asr.model_id", &self.asr_model_id)
             .map_err(|e| e.to_string())?;
         if let Some(key) = api_key {
@@ -252,7 +257,11 @@ pub fn provider_from_settings(
     let model = settings.model.clone();
     match settings.provider_kind.as_str() {
         "openai" => Ok(Box::new(OpenAiProvider::new(model, key)?)),
-        "custom" => Ok(Box::new(CompatibleProvider::new(settings.base_url.clone(), model, key)?)),
+        "custom" => Ok(Box::new(CompatibleProvider::new(
+            settings.base_url.clone(),
+            model,
+            key,
+        )?)),
         _ => Ok(Box::new(DeepSeekProvider::new(model, key)?)),
     }
 }
@@ -351,12 +360,11 @@ pub fn list_models() -> Result<Vec<ModelStatus>, String> {
         let sha256_ok = if entry.sha256.is_empty() {
             imported
         } else {
-            match mgr.resolve_path(&entry.id).map(|p| {
-                crate::asr::model_manager::verify_sha256(&p, &entry.sha256)
-            }) {
-                Ok(Ok(())) => true,
-                _ => false,
-            }
+            matches!(
+                mgr.resolve_path(&entry.id)
+                    .map(|p| { crate::asr::model_manager::verify_sha256(&p, &entry.sha256) }),
+                Ok(Ok(()))
+            )
         };
         out.push(ModelStatus {
             id: entry.id.clone(),
@@ -372,7 +380,9 @@ pub fn list_models() -> Result<Vec<ModelStatus>, String> {
 
 /// 扫描模型目录中未登记的候选文件并按清单（SHA-256/大小）匹配导入；
 /// Silero 条目额外落盘为 `silero_vad.onnx`（VAD 固定文件名）。
-pub fn scan_and_import(dir: &std::path::Path) -> Result<Vec<crate::asr::model_manager::ImportedModel>, String> {
+pub fn scan_and_import(
+    dir: &std::path::Path,
+) -> Result<Vec<crate::asr::model_manager::ImportedModel>, String> {
     let mut mgr = crate::asr::model_manager::ModelManager::new(dir.to_path_buf())
         .map_err(|e| e.to_string())?;
     let registry_ids: std::collections::HashSet<String> =
@@ -385,11 +395,19 @@ pub fn scan_and_import(dir: &std::path::Path) -> Result<Vec<crate::asr::model_ma
             if !p.is_file() {
                 continue;
             }
-            let is_candidate = p.extension().map(|x| {
-                let x = x.to_string_lossy().to_lowercase();
-                x == "bin" || x == "onnx"
-            }).unwrap_or(false);
-            if is_candidate && !p.file_name().map(|n| n.to_string_lossy().starts_with("silero_vad.onnx")).unwrap_or(false) {
+            let is_candidate = p
+                .extension()
+                .map(|x| {
+                    let x = x.to_string_lossy().to_lowercase();
+                    x == "bin" || x == "onnx"
+                })
+                .unwrap_or(false);
+            if is_candidate
+                && !p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().starts_with("silero_vad.onnx"))
+                    .unwrap_or(false)
+            {
                 scanned.push(p);
             }
         }
@@ -457,10 +475,8 @@ mod tests {
             &'a self,
             _request: AnswerRequest,
             cancel: CancellationToken,
-        ) -> futures_util::future::BoxFuture<
-            'a,
-            Result<mpsc::Receiver<AnswerEvent>, AnswerError>,
-        > {
+        ) -> futures_util::future::BoxFuture<'a, Result<mpsc::Receiver<AnswerEvent>, AnswerError>>
+        {
             Box::pin(async move {
                 let (tx, rx) = mpsc::channel(16);
                 let events = self.events.clone();
@@ -507,7 +523,10 @@ mod tests {
     #[tokio::test]
     async fn provider_test_propagates_failure() {
         let provider = FakeProvider {
-            events: vec![AnswerEvent::Started, AnswerEvent::Failed("认证失败：HTTP 401".into())],
+            events: vec![
+                AnswerEvent::Started,
+                AnswerEvent::Failed("认证失败：HTTP 401".into()),
+            ],
         };
         let req = AnswerRequest {
             question_id: "t".into(),
@@ -527,7 +546,8 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         let creds = CredentialStore::new();
         // 使用绝不会存在的 provider 名，避免本机 Credential Manager 中真实保存的 key 影响断言
-        db.set_setting("provider.kind", "never-used-provider").unwrap();
+        db.set_setting("provider.kind", "never-used-provider")
+            .unwrap();
         let s = AppSettings::load(&db, &creds);
         assert_eq!(s.provider_kind, "never-used-provider");
         assert_eq!(s.retention_days, 7);
