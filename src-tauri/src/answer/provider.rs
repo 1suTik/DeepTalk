@@ -17,8 +17,6 @@ use serde_json::{json, Value};
 use tokio::sync::{mpsc, Notify};
 use tracing::warn;
 
-use crate::answer::prompt;
-
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 pub const DEFAULT_TOTAL_TIMEOUT: Duration = Duration::from_secs(60);
 const HEARTBEAT: Duration = Duration::from_millis(200);
@@ -74,7 +72,8 @@ impl AnswerConfig {
     }
 }
 
-/// 答案生成请求：问题、近期转写与命中的资料片段。
+/// 答案生成请求：问题、近期转写、命中的资料片段与已渲染的提示词文本。
+/// 提示词由调用方按当前激活方案渲染（设置页可切换，下一轮立即生效）。
 #[derive(Debug, Clone)]
 pub struct AnswerRequest {
     pub question_id: String,
@@ -82,6 +81,8 @@ pub struct AnswerRequest {
     pub recent_transcript: Vec<String>,
     pub profile_context: Vec<String>,
     pub response_language: String,
+    pub system_prompt: String,
+    pub user_prompt: String,
 }
 
 /// 流式答案事件。固定输出顺序：`short_answer -> key_points -> follow_ups`。
@@ -206,16 +207,16 @@ impl OpenAiCompatibleClient {
                 "stream": true,
                 "temperature": 0.3,
                 "messages": [
-                    { "role": "system", "content": prompt::build_system_prompt(&request.response_language) },
-                    { "role": "user", "content": prompt::build_user_prompt(request) },
+                    { "role": "system", "content": request.system_prompt },
+                    { "role": "user", "content": request.user_prompt },
                 ],
             }),
             ApiStyle::Responses => json!({
                 "model": self.cfg.model,
                 "stream": true,
                 "temperature": 0.3,
-                "instructions": prompt::build_system_prompt(&request.response_language),
-                "input": [ { "role": "user", "content": prompt::build_user_prompt(request) } ],
+                "instructions": request.system_prompt,
+                "input": [ { "role": "user", "content": request.user_prompt } ],
             }),
         }
     }
@@ -717,6 +718,8 @@ mod tests {
             recent_transcript: vec!["我们负责音频采集模块。".into()],
             profile_context: vec!["项目：WASAPI 音频采集，延迟 80ms".into()],
             response_language: "中文".into(),
+            system_prompt: "系统规则".into(),
+            user_prompt: "【问题】请介绍一下你负责的项目".into(),
         }
     }
 

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { EventPayloads } from "./events";
-import type { AppSettings, SessionState } from "../types/domain";
+import type { AppSettings, PromptPreset, SessionState } from "../types/domain";
 
 /** 非 Tauri 环境（jsdom 单测、纯浏览器）下安全降级。 */
 export function isTauri(): boolean {
@@ -86,6 +86,31 @@ export async function scanAndImportModels(): Promise<ImportedModel[]> {
 /** 显示/隐藏置顶小窗（主界面开关）。 */
 export async function setOverlayVisible(visible: boolean): Promise<void> {
   return invoke("set_overlay_visible", { visible });
+}
+
+/** 提示词方案列表（内置 + 自定义，含激活标记）。 */
+export async function listPromptPresets(): Promise<PromptPreset[]> {
+  return invoke("list_prompt_presets");
+}
+
+/** 切换激活方案（下一轮答案立即生效）。 */
+export async function setActivePromptPreset(id: string): Promise<void> {
+  return invoke("set_active_prompt_preset", { id });
+}
+
+/** 新建或更新自定义方案；返回方案 id。 */
+export async function savePromptPreset(
+  id: string | null,
+  name: string,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string> {
+  return invoke("save_prompt_preset", { id, name, systemPrompt, userPrompt });
+}
+
+/** 删除自定义方案（内置不可删；删除激活方案自动回退默认）。 */
+export async function deletePromptPreset(id: string): Promise<void> {
+  return invoke("delete_prompt_preset", { id });
 }
 
 /** 订阅后端事件，返回取消订阅函数；非 Tauri 环境返回空操作。 */

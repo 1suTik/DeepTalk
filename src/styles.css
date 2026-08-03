@@ -557,6 +557,92 @@ button {
   gap: 10px;
 }
 
+.settings-page__presets {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-page__presets li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.settings-page__preset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  cursor: pointer;
+}
+
+.settings-page__preset-name {
+  font-weight: 600;
+}
+
+.settings-page__preset-badge {
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.settings-page__preset-state {
+  font-size: 12px;
+  color: var(--good);
+}
+
+.settings-page__preset-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.settings-page__preset-actions button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.settings-page__preset-actions button:hover {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.settings-page__draft {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.settings-page__field textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
 /* 采集指示 */
 .capture-indicator {
   display: inline-flex;

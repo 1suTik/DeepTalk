@@ -45,13 +45,38 @@ vi.mock("../../lib/tauri", () => ({
       importedAtMs: 0,
     },
   ]),
+  listPromptPresets: vi.fn(async () => [
+    {
+      id: "interview",
+      name: "面试助手",
+      systemPrompt: "系统A",
+      userPrompt: "用户A",
+      builtin: true,
+      active: true,
+    },
+    {
+      id: "general",
+      name: "通用助手",
+      systemPrompt: "系统B",
+      userPrompt: "用户B",
+      builtin: true,
+      active: false,
+    },
+  ]),
+  setActivePromptPreset: vi.fn(async () => undefined),
+  savePromptPreset: vi.fn(async () => "custom-1"),
+  deletePromptPreset: vi.fn(async () => undefined),
 }));
 
 import {
   clearAllData,
+  deletePromptPreset,
   getSettings,
+  listPromptPresets,
+  savePromptPreset,
   saveSettings,
   scanAndImportModels,
+  setActivePromptPreset,
   testProviderConnection,
 } from "../../lib/tauri";
 
@@ -119,5 +144,70 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "扫描并校验" }));
     await waitFor(() => expect(scanAndImportModels).toHaveBeenCalled());
     expect(await screen.findByTestId("scan-result")).toHaveTextContent("已导入 1 个模型");
+  });
+
+  it("lists prompt presets and switches active one", async () => {
+    render(<SettingsPage initial={base} />);
+    expect(await screen.findByTestId("presets-section")).toBeVisible();
+    expect(screen.getByText("面试助手")).toBeVisible();
+    expect(screen.getByText("通用助手")).toBeVisible();
+    expect(screen.getByText("使用中")).toBeVisible();
+    fireEvent.click(screen.getByRole("radio", { name: "选择 通用助手" }));
+    await waitFor(() =>
+      expect(setActivePromptPreset).toHaveBeenCalledWith("general"),
+    );
+  });
+
+  it("creates a custom preset via the draft form", async () => {
+    render(<SettingsPage initial={base} />);
+    await screen.findByTestId("presets-section");
+    fireEvent.click(screen.getByRole("button", { name: "新建方案" }));
+    expect(await screen.findByTestId("preset-draft")).toBeVisible();
+    fireEvent.change(screen.getByLabelText(/方案名称/), {
+      target: { value: "我的方案" },
+    });
+    fireEvent.change(screen.getByLabelText(/系统提示词/), {
+      target: { value: "你是一个测试助手" },
+    });
+    fireEvent.change(screen.getByLabelText(/用户提示词模板/), {
+      target: { value: "问题：{question}" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存方案" }));
+    await waitFor(() =>
+      expect(savePromptPreset).toHaveBeenCalledWith(
+        null,
+        "我的方案",
+        "你是一个测试助手",
+        "问题：{question}",
+      ),
+    );
+    await waitFor(() => expect(listPromptPresets).toHaveBeenCalled());
+  });
+
+  it("deletes a custom preset after confirmation", async () => {
+    vi.mocked(listPromptPresets).mockResolvedValueOnce([
+      {
+        id: "interview",
+        name: "面试助手",
+        systemPrompt: "系统A",
+        userPrompt: "用户A",
+        builtin: true,
+        active: false,
+      },
+      {
+        id: "custom-1",
+        name: "我的方案",
+        systemPrompt: "系统C",
+        userPrompt: "用户C",
+        builtin: false,
+        active: true,
+      },
+    ]);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<SettingsPage initial={base} />);
+    expect(await screen.findByTestId("preset-custom-1")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "删除 我的方案" }));
+    await waitFor(() => expect(deletePromptPreset).toHaveBeenCalledWith("custom-1"));
+    confirmSpy.mockRestore();
   });
 });

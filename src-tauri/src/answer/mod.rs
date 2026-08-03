@@ -3,7 +3,7 @@
 pub mod compatible;
 pub mod deepseek;
 pub mod openai;
-mod prompt;
+pub mod prompt;
 mod provider;
 
 pub use provider::{

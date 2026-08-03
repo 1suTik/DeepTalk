@@ -267,7 +267,6 @@ pub fn provider_from_settings(
 }
 
 /// 连接测试：发起一次流式请求，取首个 delta 或完成状态。
-/// 真实网络请求不在单元测试中执行（使用假 provider 验证该函数逻辑）。
 pub async fn run_provider_test(
     provider: &dyn AnswerProvider,
     request: AnswerRequest,
@@ -312,6 +311,8 @@ pub async fn test_provider_connection(
         recent_transcript: vec![],
         profile_context: vec![],
         response_language: "中文".into(),
+        system_prompt: "你是连接测试助手。".into(),
+        user_prompt: "请回复“连接成功”即可，不需要展开。".into(),
     };
     let cancel = CancellationToken::new();
     let result = tokio::time::timeout(
@@ -329,6 +330,158 @@ pub async fn test_provider_connection(
 #[tauri::command]
 pub fn clear_all_data(state: State<'_, AppState>) -> Result<(), String> {
     state.db.purge_all().map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// 提示词方案命令（预设 + 自定义并存，切换立即生效）
+// ---------------------------------------------------------------------------
+
+/// 设置页展示的提示词方案：内置预设（只读）+ 用户自定义（可编辑/删除）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPresetDto {
+    pub id: String,
+    pub name: String,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub builtin: bool,
+    pub active: bool,
+}
+
+fn presets_to_dto(db: &Db, active_id: &str) -> Result<Vec<PromptPresetDto>, String> {
+    let mut out: Vec<PromptPresetDto> = crate::answer::prompt::builtin_presets()
+        .into_iter()
+        .map(|p| {
+            let is_active = p.id == active_id;
+            PromptPresetDto {
+                id: p.id,
+                name: p.name,
+                system_prompt: p.system_prompt,
+                user_prompt: p.user_prompt,
+                builtin: true,
+                active: is_active,
+            }
+        })
+        .collect();
+    for row in db.list_prompt_presets().map_err(|e| e.to_string())? {
+        let is_active = row.id == active_id;
+        out.push(PromptPresetDto {
+            id: row.id,
+            name: row.name,
+            system_prompt: row.system_prompt,
+            user_prompt: row.user_prompt,
+            builtin: false,
+            active: is_active,
+        });
+    }
+    Ok(out)
+}
+
+/// 当前激活方案 id（settings `prompt.active_id`，缺失时默认面试助手）。
+fn active_preset_id(db: &Db) -> String {
+    db.get_setting("prompt.active_id")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| crate::answer::prompt::PRESET_INTERVIEW.into())
+}
+
+fn set_active_preset_impl(db: &Db, id: &str) -> Result<(), String> {
+    if crate::answer::prompt::builtin_by_id(id).is_none()
+        && db
+            .get_prompt_preset(id)
+            .map_err(|e| e.to_string())?
+            .is_none()
+    {
+        return Err(format!("提示词方案不存在：{id}"));
+    }
+    db.set_setting("prompt.active_id", id)
+        .map_err(|e| e.to_string())
+}
+
+fn save_preset_impl(
+    db: &Db,
+    id: Option<&str>,
+    name: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+) -> Result<String, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("方案名称不能为空".into());
+    }
+    if system_prompt.trim().is_empty() && user_prompt.trim().is_empty() {
+        return Err("系统提示词与用户提示词不能同时为空".into());
+    }
+    let preset_id = match id {
+        Some(existing) => {
+            let row = db.get_prompt_preset(existing).map_err(|e| e.to_string())?;
+            match row {
+                Some(_) => existing.to_string(),
+                None => return Err(format!("提示词方案不存在：{existing}")),
+            }
+        }
+        None => format!("custom-{}", crate::storage::retention::now_ms()),
+    };
+    db.upsert_prompt_preset(&crate::storage::database::PromptPresetRow {
+        id: preset_id.clone(),
+        name: name.to_string(),
+        system_prompt: system_prompt.to_string(),
+        user_prompt: user_prompt.to_string(),
+        created_at_ms: crate::storage::retention::now_ms(),
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(preset_id)
+}
+
+fn delete_preset_impl(db: &Db, id: &str) -> Result<(), String> {
+    if crate::answer::prompt::builtin_by_id(id).is_some() {
+        return Err("内置方案不可删除".into());
+    }
+    let row = db.get_prompt_preset(id).map_err(|e| e.to_string())?;
+    if row.is_none() {
+        return Err(format!("提示词方案不存在：{id}"));
+    }
+    db.delete_prompt_preset(id).map_err(|e| e.to_string())?;
+    if active_preset_id(db) == id {
+        db.set_setting("prompt.active_id", crate::answer::prompt::PRESET_INTERVIEW)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_prompt_presets(state: State<'_, AppState>) -> Result<Vec<PromptPresetDto>, String> {
+    let active = active_preset_id(&state.db);
+    presets_to_dto(&state.db, &active)
+}
+
+#[tauri::command]
+pub fn set_active_prompt_preset(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    set_active_preset_impl(&state.db, &id)
+}
+
+/// 新建或更新自定义方案；返回方案 id。内置预设不可通过本命令修改。
+#[tauri::command]
+pub fn save_prompt_preset(
+    state: State<'_, AppState>,
+    id: Option<String>,
+    name: String,
+    system_prompt: String,
+    user_prompt: String,
+) -> Result<String, String> {
+    save_preset_impl(
+        &state.db,
+        id.as_deref(),
+        &name,
+        &system_prompt,
+        &user_prompt,
+    )
+}
+
+/// 删除自定义方案；内置预设不可删除。若删除的是当前激活方案，自动回退默认。
+#[tauri::command]
+pub fn delete_prompt_preset(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_preset_impl(&state.db, &id)
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +702,8 @@ mod tests {
             recent_transcript: vec![],
             profile_context: vec![],
             response_language: "中文".into(),
+            system_prompt: String::new(),
+            user_prompt: String::new(),
         };
         let out = run_provider_test(&provider, req, CancellationToken::new())
             .await
@@ -571,6 +726,8 @@ mod tests {
             recent_transcript: vec![],
             profile_context: vec![],
             response_language: "中文".into(),
+            system_prompt: String::new(),
+            user_prompt: String::new(),
         };
         let err = run_provider_test(&provider, req, CancellationToken::new())
             .await
@@ -631,5 +788,61 @@ mod tests {
         let imported = super::scan_and_import(&dir).unwrap();
         assert!(imported.is_empty(), "无匹配文件不得导入");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- 提示词方案 --------------------------------------------------------
+
+    #[test]
+    fn preset_list_contains_builtins_and_custom_with_active_flag() {
+        let db = Db::open_in_memory().unwrap();
+        let id = save_preset_impl(&db, None, "自定义方案", "系统A", "用户A").unwrap();
+        let list = presets_to_dto(&db, &id).unwrap();
+        assert_eq!(list.len(), 3);
+        let builtin = list.iter().find(|p| p.builtin).unwrap();
+        assert!(builtin.name == "面试助手" || builtin.name == "通用助手");
+        let custom = list.iter().find(|p| p.id == id).unwrap();
+        assert!(!custom.builtin);
+        assert!(custom.active);
+        assert!(!builtin.active);
+    }
+
+    #[test]
+    fn set_active_rejects_unknown_id() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(set_active_preset_impl(&db, "nope").is_err());
+        set_active_preset_impl(&db, crate::answer::prompt::PRESET_GENERAL).unwrap();
+        assert_eq!(active_preset_id(&db), crate::answer::prompt::PRESET_GENERAL);
+    }
+
+    #[test]
+    fn save_preset_validates_name_and_content() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(save_preset_impl(&db, None, "  ", "系统", "用户").is_err());
+        assert!(save_preset_impl(&db, None, "空内容", "  ", "  ").is_err());
+    }
+
+    #[test]
+    fn save_preset_updates_existing_and_rejects_unknown() {
+        let db = Db::open_in_memory().unwrap();
+        let id = save_preset_impl(&db, None, "旧名", "旧系统", "旧用户").unwrap();
+        save_preset_impl(&db, Some(&id), "新名", "新系统", "新用户").unwrap();
+        let row = db.get_prompt_preset(&id).unwrap().unwrap();
+        assert_eq!(row.name, "新名");
+        assert_eq!(row.system_prompt, "新系统");
+        assert!(save_preset_impl(&db, Some("missing"), "x", "y", "z").is_err());
+    }
+
+    #[test]
+    fn delete_builtin_is_rejected_and_active_custom_falls_back() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(delete_preset_impl(&db, crate::answer::prompt::PRESET_INTERVIEW).is_err());
+        let id = save_preset_impl(&db, None, "要删除", "系统", "用户").unwrap();
+        set_active_preset_impl(&db, &id).unwrap();
+        delete_preset_impl(&db, &id).unwrap();
+        assert_eq!(
+            active_preset_id(&db),
+            crate::answer::prompt::PRESET_INTERVIEW
+        );
+        assert!(delete_preset_impl(&db, &id).is_err());
     }
 }

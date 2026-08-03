@@ -428,13 +428,23 @@ impl Orchestrator {
             .iter()
             .cloned()
             .collect::<Vec<_>>();
-        let request = AnswerRequest {
+        let mut request = AnswerRequest {
             question_id: question.id.clone(),
             question: question.text.clone(),
             recent_transcript: recent,
             profile_context: matched,
             response_language: PROMPT_LANGUAGE.into(),
+            system_prompt: String::new(),
+            user_prompt: String::new(),
         };
+        // 每轮生成前读取激活的提示词方案（设置页切换后立即生效）
+        let preset = crate::answer::prompt::load_active_preset(&self.db).unwrap_or_else(|e| {
+            tracing::warn!("读取提示词方案失败，回退默认：{e}");
+            crate::answer::prompt::builtin_by_id(crate::answer::prompt::PRESET_INTERVIEW)
+                .expect("内置默认方案必须存在")
+        });
+        request.system_prompt = preset.render_system(PROMPT_LANGUAGE);
+        request.user_prompt = preset.render_user(&request);
         let provider = self.provider.clone();
         let sink = self.sink.clone();
         let answer_tx = self.answer_tx.clone();

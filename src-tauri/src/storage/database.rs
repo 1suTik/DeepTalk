@@ -9,7 +9,10 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 
-const MIGRATIONS: &[&str] = &[include_str!("../../migrations/001_initial.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../../migrations/001_initial.sql"),
+    include_str!("../../migrations/002_prompt_presets.sql"),
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
@@ -55,6 +58,15 @@ pub struct ProfileDocRow {
     pub original_path: String,
     pub enabled: bool,
     pub imported_at_ms: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct PromptPresetRow {
+    pub id: String,
+    pub name: String,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub created_at_ms: u64,
 }
 
 /// 线程安全的数据库句柄（rusqlite Connection 非 Send，以 Arc<Mutex> 包装，可 Clone 共享）。
@@ -114,6 +126,72 @@ impl Db {
         let mut stmt = conn.prepare("SELECT key, value FROM settings ORDER BY key")?;
         let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    // ---- prompt_presets ----------------------------------------------------
+
+    pub fn list_prompt_presets(&self) -> Result<Vec<PromptPresetRow>, DbError> {
+        let conn = self.inner.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, system_prompt, user_prompt, created_at_ms
+             FROM prompt_presets ORDER BY created_at_ms",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(PromptPresetRow {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                system_prompt: r.get(2)?,
+                user_prompt: r.get(3)?,
+                created_at_ms: r.get::<_, i64>(4)? as u64,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn get_prompt_preset(&self, id: &str) -> Result<Option<PromptPresetRow>, DbError> {
+        let conn = self.inner.lock().unwrap();
+        Ok(conn
+            .query_row(
+                "SELECT id, name, system_prompt, user_prompt, created_at_ms
+                 FROM prompt_presets WHERE id = ?1",
+                params![id],
+                |r| {
+                    Ok(PromptPresetRow {
+                        id: r.get(0)?,
+                        name: r.get(1)?,
+                        system_prompt: r.get(2)?,
+                        user_prompt: r.get(3)?,
+                        created_at_ms: r.get::<_, i64>(4)? as u64,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    pub fn upsert_prompt_preset(&self, row: &PromptPresetRow) -> Result<(), DbError> {
+        let conn = self.inner.lock().unwrap();
+        conn.execute(
+            "INSERT INTO prompt_presets (id, name, system_prompt, user_prompt, created_at_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               system_prompt = excluded.system_prompt,
+               user_prompt = excluded.user_prompt",
+            params![
+                row.id,
+                row.name,
+                row.system_prompt,
+                row.user_prompt,
+                row.created_at_ms as i64
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_prompt_preset(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.inner.lock().unwrap();
+        conn.execute("DELETE FROM prompt_presets WHERE id = ?1", params![id])?;
+        Ok(())
     }
 
     // ---- meetings ---------------------------------------------------------

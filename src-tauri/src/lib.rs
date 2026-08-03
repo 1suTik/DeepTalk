@@ -39,6 +39,10 @@ pub fn run() {
             commands::list_models,
             commands::scan_and_import_models,
             commands::set_overlay_visible,
+            commands::list_prompt_presets,
+            commands::set_active_prompt_preset,
+            commands::save_prompt_preset,
+            commands::delete_prompt_preset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

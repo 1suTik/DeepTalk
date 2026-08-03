@@ -58,3 +58,13 @@ export interface AppSettings {
   microphoneEnabled: boolean;
   asrModelId: string;
 }
+
+/** 提示词方案（内置只读；自定义可编辑/删除；active 表示当前激活）。 */
+export interface PromptPreset {
+  id: string;
+  name: string;
+  systemPrompt: string;
+  userPrompt: string;
+  builtin: boolean;
+  active: boolean;
+}

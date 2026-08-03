@@ -5,5 +5,7 @@ pub mod database;
 pub mod retention;
 
 pub use credentials::{credential_account, CredentialStore};
-pub use database::{AnswerRow, Db, DbError, ProfileDocRow, QuestionRow, TranscriptRow};
+pub use database::{
+    AnswerRow, Db, DbError, ProfileDocRow, PromptPresetRow, QuestionRow, TranscriptRow,
+};
 pub use retention::Retention;
