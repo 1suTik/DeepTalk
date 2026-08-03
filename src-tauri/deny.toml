@@ -1,0 +1,30 @@
+# cargo-deny 许可证审计配置（Task 11 Step 3）
+# 允许列表覆盖本项目直接与传递依赖实际使用的许可证：
+# MIT / Apache-2.0 / ISC / Unlicense（whisper-rs）/ 0BSD / MPL-2.0 / Unicode-3.0 等。
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "ISC",
+    "Unlicense",
+    "0BSD",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "BSL-1.0",
+    "Zlib",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "bzip2-1.0.6",
+    "CC0-1.0",
+    "MIT-0",
+]
+# cssparser 系列实际许可是 (MIT OR Apache-2.0) AND Unicode-3.0，
+# cargo-deny 0.20 无法解析该 AND 组合表达式，故在例外中按单个许可证逐条判定：
+# 两个 crate 均来自 servo 官方，与 allow 列表兼容（MIT/Apache-2.0/Unicode-3.0）。
+exceptions = [
+    { name = "cssparser", version = "0.36.0", allow = ["MIT", "Apache-2.0", "Unicode-3.0"] },
+    { name = "cssparser-macros", version = "0.6.1", allow = ["MIT", "Apache-2.0", "Unicode-3.0"] },
+]

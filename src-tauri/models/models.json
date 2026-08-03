@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "ggml-large-v3-turbo-q5_0",
+      "name": "Whisper large-v3-turbo (Q5_0)",
+      "url": "https://huggingface.co/ggml-org/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+      "sha256": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+      "size_bytes": 574041195,
+      "languages": ["zh", "en", "multi"],
+      "tier": "high",
+      "backends": ["vulkan", "cpu"]
+    },
+    {
+      "id": "ggml-base-q5_0",
+      "name": "Whisper base (Q5_0)",
+      "url": "https://huggingface.co/ggml-org/whisper.cpp/resolve/main/ggml-base-q5_0.bin",
+      "sha256": "",
+      "size_bytes": 61000000,
+      "languages": ["zh", "en", "multi"],
+      "tier": "fallback",
+      "backends": ["cpu", "vulkan"]
+    },
+    {
+      "id": "silero-vad-v6",
+      "name": "Silero VAD v6 (16k ONNX)",
+      "url": "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx",
+      "sha256": "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f",
+      "size_bytes": 2327524,
+      "languages": ["multi"],
+      "tier": "vad",
+      "backends": ["cpu"]
+    }
+  ]
+}
