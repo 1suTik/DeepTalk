@@ -11,10 +11,10 @@
 ### 交付内容
 
 - Rust 工具链（`.cargo` + `.rustup`）、Vulkan SDK 1.4.350.0、LLVM、CMake、Ninja 从 C 盘迁移至 `G:\Project\build-tools\`（约 7.8GB，robocopy 逐目录校验 100% 文件数 + 100% 字节）
-- 环境变量：新增 `RUSTUP_HOME`、`CARGO_HOME`（均指向 G 盘）；`VULKAN_SDK`、`LIBCLANG_PATH` 更新为 G 盘路径；User PATH 旧条目（`.cargo\bin`、WinGet ninja）已替换；系统 PATH（Vulkan\Bin、CMake\bin）待管理员执行替换
+- 环境变量：新增 `RUSTUP_HOME`、`CARGO_HOME`（均指向 G 盘）；`VULKAN_SDK`、`LIBCLANG_PATH` 更新为 G 盘路径；User PATH 旧条目（`.cargo\bin`、WinGet ninja）与系统 PATH（Vulkan\Bin、CMake\bin）均已替换
 - `scripts/build-env.ps1`：全部路径改为 `G:\Project\build-tools`，新增 RUSTUP_HOME/CARGO_HOME 自愈逻辑与输出
 - `AGENTS.md` 第 3 节（构建环境）与第 6 节（已知环境事实）、`docs/build.md` 同步更新
-- C 盘旧目录重命名保留（`-old-migrate` 后缀，`.cargo` 因 VSCode 占用待重试），稳定后删除
+- C 盘旧副本全部删除：`.cargo`/`.rustup`/`ninja`（用户级）、`C:\VulkanSDK`、`C:\Program Files\LLVM`、`C:\Program Files\CMake`（管理员脚本一体执行 PATH 替换 + 删除）
 
 ### 验证结果
 
@@ -24,6 +24,8 @@
 | `build-env.ps1` 新路径输出 | PASS（RUSTUP_HOME/CARGO_HOME/VULKAN_SDK/LIBCLANG_PATH 均指向 G 盘） |
 | rustc 1.97.1 / cargo 1.97.1（新 RUSTUP_HOME/CARGO_HOME） | PASS |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | PASS（116 通过 + 3 忽略（模型依赖）；whisper-rs-sys/whisper-rs 0.16.0 与 ort-sys 因 VULKAN_SDK/LIBCLANG_PATH 变更全量重建成功，13m09s） |
+| 系统 PATH 替换（管理员脚本） | PASS（无旧条目残留，仅 G 盘条目） |
+| C 盘旧副本删除 | PASS（`.cargo`/`.rustup`/`VulkanSDK`/`LLVM`/`CMake`/`ninja` 全部删除，C 盘释放约 7.2GB） |
 
 ### 提交信息
 
@@ -31,7 +33,7 @@
 
 ### 说明
 
-- 系统 PATH 替换与 VulkanSDK/LLVM/CMake 重命名需管理员权限，由用户执行 `C:\Users\17214\AppData\Local\Temp\opencode\fix-machine-path.ps1`
+- 系统 PATH 替换与 VulkanSDK/LLVM/CMake 删除由用户以管理员执行 `C:\Users\17214\AppData\Local\Temp\opencode\fix-machine-path.ps1`（已全部完成）
 - 运行期（已打包应用）不依赖这些工具；Vulkan 运行时由显卡驱动提供
 - `CARGO_TARGET_DIR=G:\t` 编译缓存未失效（rustc 版本不变），仅依赖工具路径的 crate 触发重建
 
