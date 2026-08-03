@@ -1,8 +1,8 @@
 {
-  "name": "meeting-ai-assistant",
+  "name": "deeptalk",
   "private": true,
-  "version": "0.1.0",
-  "description": "Windows 实时会议 AI 辅助程序：本地语音转写、问题检测与流式建议答案",
+  "version": "0.1.1",
+  "description": "DeepTalk（对话助手）：Windows 实时对话 AI 辅助程序，本地语音转写、问题检测与流式建议答案",
   "type": "module",
   "scripts": {
     "dev": "vite",

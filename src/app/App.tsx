@@ -44,7 +44,7 @@ export function App() {
           aria-current={view === "meeting" ? "page" : undefined}
           onClick={() => setView("meeting")}
         >
-          会议
+          主界面
         </button>
         <button
           type="button"

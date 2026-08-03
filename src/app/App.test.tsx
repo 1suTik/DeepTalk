@@ -26,13 +26,17 @@ vi.mock("../lib/tauri", () => ({
   listModels: vi.fn(async () => []),
   scanAndImportModels: vi.fn(async () => []),
   setOverlayVisible: vi.fn(async () => undefined),
+  listPromptPresets: vi.fn(async () => []),
+  setActivePromptPreset: vi.fn(async () => undefined),
+  savePromptPreset: vi.fn(async () => "custom-1"),
+  deletePromptPreset: vi.fn(async () => undefined),
 }));
 
 describe("App (main window)", () => {
   it("shows meeting page and navigates to settings", async () => {
     render(<App />);
     expect(screen.getByTestId("app-shell")).toBeVisible();
-    expect(screen.getByRole("button", { name: "会议" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "主界面" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     await waitFor(() => expect(screen.getByTestId("settings-page")).toBeVisible());
     expect(screen.getByRole("button", { name: "设置" })).toHaveAttribute("aria-current", "page");

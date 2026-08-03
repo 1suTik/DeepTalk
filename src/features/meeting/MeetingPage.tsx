@@ -88,7 +88,7 @@ export function MeetingPage() {
     <div className="meeting-page" data-testid="meeting-page">
       <header className="meeting-page__header">
         <div className="meeting-page__brand">
-          <h1>会议助手</h1>
+          <h1>DeepTalk</h1>
           <span className="meeting-page__ai" role="status" aria-label="AI 状态">
             {pipeline === "idle" && "AI 待机"}
             {pipeline === "capturing" && "AI 辅助运行中"}
