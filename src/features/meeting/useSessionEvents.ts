@@ -22,10 +22,10 @@ export function useSessionEvents() {
   useEffect(() => {
     void getSessionState().then(setSessionState);
     const unsubs = [
+      // 采集状态事件驱动：active=true → capturing；active=false → idle。
+      // 置顶小窗没有开始按钮，必须依赖此事件同步主界面的会话状态。
       onEvent(EVENTS.captureState, (p) => {
-        if (!p.active) {
-          setSessionState("idle");
-        }
+        setSessionState(p.active ? "capturing" : "idle");
       }),
       onEvent(EVENTS.audioLevel, (p) => {
         setMeters((m) => ({
