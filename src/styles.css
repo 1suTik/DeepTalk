@@ -93,6 +93,12 @@ button {
   background: rgba(99, 102, 241, 0.28);
 }
 
+.meeting-page__overlay-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 /* 音量表（顶栏内嵌，紧凑） */
 .audio-meters {
   display: flex;

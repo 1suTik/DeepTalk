@@ -38,6 +38,7 @@ pub fn run() {
             commands::clear_all_data,
             commands::list_models,
             commands::scan_and_import_models,
+            commands::set_overlay_visible,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

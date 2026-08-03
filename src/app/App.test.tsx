@@ -25,6 +25,7 @@ vi.mock("../lib/tauri", () => ({
   clearAllData: vi.fn(async () => undefined),
   listModels: vi.fn(async () => []),
   scanAndImportModels: vi.fn(async () => []),
+  setOverlayVisible: vi.fn(async () => undefined),
 }));
 
 describe("App (main window)", () => {

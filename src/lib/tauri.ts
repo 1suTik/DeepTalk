@@ -83,6 +83,11 @@ export async function scanAndImportModels(): Promise<ImportedModel[]> {
   return invoke("scan_and_import_models");
 }
 
+/** 显示/隐藏置顶小窗（主界面开关）。 */
+export async function setOverlayVisible(visible: boolean): Promise<void> {
+  return invoke("set_overlay_visible", { visible });
+}
+
 /** 订阅后端事件，返回取消订阅函数；非 Tauri 环境返回空操作。 */
 export function onEvent<K extends keyof EventPayloads>(
   event: K,

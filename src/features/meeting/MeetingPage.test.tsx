@@ -15,6 +15,7 @@ vi.mock("../../lib/tauri", () => ({
   pinCurrentAnswer: vi.fn(async () => undefined),
   generateAnswer: vi.fn(async () => undefined),
   cancelCurrentAnswer: vi.fn(async () => undefined),
+  setOverlayVisible: vi.fn(async () => undefined),
   onEvent: vi.fn(
     <K extends keyof EventPayloads>(_event: K, handler: (p: EventPayloads[K]) => void) => {
       const orig = emitter.fire;
@@ -29,7 +30,7 @@ vi.mock("../../lib/tauri", () => ({
   ),
 }));
 
-import { cancelCurrentAnswer, generateAnswer, pinCurrentAnswer, startSession, stopSession } from "../../lib/tauri";
+import { cancelCurrentAnswer, generateAnswer, pinCurrentAnswer, setOverlayVisible, startSession, stopSession } from "../../lib/tauri";
 
 const question: DetectedQuestion = {
   id: "q-1",
@@ -47,6 +48,15 @@ describe("MeetingPage", () => {
     await waitFor(() => expect(startSession).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "停止会话" }));
     await waitFor(() => expect(stopSession).toHaveBeenCalled());
+  });
+
+  it("toggles the overlay window", async () => {
+    render(<MeetingPage />);
+    fireEvent.click(screen.getByRole("button", { name: "打开小窗" }));
+    await waitFor(() => expect(setOverlayVisible).toHaveBeenCalledWith(true));
+    expect(screen.getByRole("button", { name: "关闭小窗" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "关闭小窗" }));
+    await waitFor(() => expect(setOverlayVisible).toHaveBeenCalledWith(false));
   });
 
   it("shows empty state before any question", () => {

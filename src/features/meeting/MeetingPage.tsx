@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PanelTop } from "lucide-react";
 import { AudioMeters } from "../../components/AudioMeters";
 import { CaptureIndicator } from "../../components/CaptureIndicator";
 import { AnswerCard } from "../../components/AnswerCard";
@@ -6,6 +7,7 @@ import { useSessionEvents } from "./useSessionEvents";
 import {
   cancelCurrentAnswer,
   generateAnswer,
+  setOverlayVisible,
   startSession,
   stopSession,
 } from "../../lib/tauri";
@@ -38,6 +40,7 @@ export function MeetingPage() {
     useSessionEvents();
   const [fontScale, setFontScale] = useState(1);
   const [copied, setCopied] = useState(false);
+  const [overlayVisible, setOverlayVisibleState] = useState(false);
   const copyTimer = useRef<number | undefined>(undefined);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -75,6 +78,12 @@ export function MeetingPage() {
   const pipeline = toPipelineState(sessionState);
   const captureSource: CaptureSource = running ? "system" : "none";
 
+  const handleOverlayToggle = useCallback(async () => {
+    const next = !overlayVisible;
+    await setOverlayVisible(next);
+    setOverlayVisibleState(next);
+  }, [overlayVisible]);
+
   return (
     <div className="meeting-page" data-testid="meeting-page">
       <header className="meeting-page__header">
@@ -89,6 +98,16 @@ export function MeetingPage() {
         <div className="meeting-page__controls">
           <CaptureIndicator source={captureSource} />
           <AudioMeters system={meters.system} microphone={meters.microphone} />
+          <button
+            type="button"
+            className="meeting-page__toggle meeting-page__overlay-toggle"
+            aria-pressed={overlayVisible}
+            title="显示/隐藏置顶小窗"
+            onClick={() => void handleOverlayToggle()}
+          >
+            <PanelTop size={14} />
+            {overlayVisible ? "关闭小窗" : "打开小窗"}
+          </button>
           <button
             type="button"
             className="meeting-page__toggle"

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::answer::{
     compatible::CompatibleProvider, deepseek::DeepSeekProvider, openai::OpenAiProvider,
@@ -476,6 +476,24 @@ pub async fn scan_and_import_models(
     tokio::task::spawn_blocking(move || scan_and_import(&dir))
         .await
         .map_err(|e| e.to_string())?
+}
+
+// ---------------------------------------------------------------------------
+// 置顶小窗开关（主界面控制小窗显隐）
+// ---------------------------------------------------------------------------
+
+/// 显示/隐藏置顶小窗（overlay）。隐藏时窗口仍在后台监听事件，重新打开即时同步。
+#[tauri::command]
+pub async fn set_overlay_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("overlay")
+        .ok_or_else(|| "overlay 窗口不存在".to_string())?;
+    if visible {
+        window.show().map_err(|e| e.to_string())?;
+    } else {
+        window.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
