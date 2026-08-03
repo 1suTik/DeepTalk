@@ -12,6 +12,8 @@ pub mod vad;
 
 use std::sync::Arc;
 
+use tauri::Manager;
+
 pub use commands::AppState;
 
 pub fn run() {
@@ -25,6 +27,29 @@ pub fn run() {
     tauri::Builder::default()
         .manage(app_state)
         .manage(Arc::new(state::SessionManager::new()))
+        .setup(|app| {
+            // overlay 小窗的「关闭」改为隐藏：窗口销毁后无法再次 show() 唤起，
+            // 保持窗口存活（后台继续监听事件），X 按钮等价于「关闭小窗」。
+            if let Some(win) = app.get_webview_window("overlay") {
+                let win_hidden = win.clone();
+                win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win_hidden.hide();
+                    }
+                });
+            }
+            // overlay 永不销毁，主窗口关闭时显式退出整个应用（否则进程常驻后台）。
+            if let Some(main_win) = app.get_webview_window("main") {
+                let app_handle = app.handle().clone();
+                main_win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Destroyed = event {
+                        app_handle.exit(0);
+                    }
+                });
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::start_session,
             commands::stop_session,
