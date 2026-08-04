@@ -3,6 +3,7 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { OverlayPage } from "../features/meeting/OverlayPage";
 import { MeetingPage } from "../features/meeting/MeetingPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { MouseGlow } from "../components/MouseGlow";
 import { useSessionEvents } from "../features/meeting/useSessionEvents";
 import type { PipelineState } from "../types/domain";
 
@@ -37,6 +38,7 @@ export function App() {
   }
   return (
     <div className="app-shell" data-testid="app-shell">
+      <MouseGlow />
       <nav className="app-shell__nav" aria-label="主导航">
         <button
           type="button"
