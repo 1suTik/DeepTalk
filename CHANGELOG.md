@@ -13,6 +13,7 @@
 - 合并 `feat/ui-redesign-glass-light`（晨光白 × 克制玻璃 UI）与 `feat/replace-app-logo`（鲸鱼 Logo）到 main（快进合并）
 - 版本号统一升至 0.2.0：`package.json` / `package-lock.json` / `src-tauri/Cargo.toml` / `Cargo.lock` / `tauri.conf.json` / `THIRD_PARTY_NOTICES.md` / README 下载链接
 - `index.html` 标题由 Meeting AI Assistant 改为 DeepTalk
+- README 新增「UI 设计系统（v0.2.0 全新）」章节，讲解晨光白主题、克制液态玻璃、交互动画、鼠标光斑与全新鲸鱼 Logo
 - 发布流程：构建 NSIS 安装包，更新公开仓库 `1suTik/DeepTalk` 的 v0.2.0 发布快照与 tag（仓库 main 只放发行所需文件，完整历史保留在私有仓库）
 
 ### 验证结果
@@ -29,6 +30,7 @@
 
 - 版本升级：`ac78460`（`feat: bump DeepTalk to v0.2.0`，分支 main）
 - 合并进入 main：`de99890`（UI 重设计）、`ae7aeb8`（Logo 更换）及对应 CHANGELOG 提交
+- README UI 系统文档：`c6b2d95`（`docs: document v0.2.0 UI system in README`）
 
 ### 说明
 
