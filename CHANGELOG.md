@@ -4,6 +4,39 @@
 
 ---
 
+## v0.2.0 发布：UI 重设计 + 新 Logo + 版本升级（2026-08-04）
+
+**日期：** 2026-08-04
+
+### 交付内容
+
+- 合并 `feat/ui-redesign-glass-light`（晨光白 × 克制玻璃 UI）与 `feat/replace-app-logo`（鲸鱼 Logo）到 main（快进合并）
+- 版本号统一升至 0.2.0：`package.json` / `package-lock.json` / `src-tauri/Cargo.toml` / `Cargo.lock` / `tauri.conf.json` / `THIRD_PARTY_NOTICES.md` / README 下载链接
+- `index.html` 标题由 Meeting AI Assistant 改为 DeepTalk
+- 发布流程：构建 NSIS 安装包，更新公开仓库 `1suTik/DeepTalk` 的 v0.2.0 发布快照与 tag（仓库 main 只放发行所需文件，完整历史保留在私有仓库）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `npm test -- --run` | PASS（9 文件 / 36 用例） |
+| `npx tsc --noEmit` | PASS |
+| `npm run build` | PASS（deeptalk@0.2.0） |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS（125 通过 / 0 失败 / 3 忽略，meeting-ai-assistant v0.2.0） |
+| `scripts/verify-third-party.ps1` | PASS（26 条登记） |
+
+### 提交信息
+
+- 版本升级：`ac78460`（`feat: bump DeepTalk to v0.2.0`，分支 main）
+- 合并进入 main：`de99890`（UI 重设计）、`ae7aeb8`（Logo 更换）及对应 CHANGELOG 提交
+
+### 说明
+
+- 公开仓库 `1suTik/DeepTalk` 的 main 为发布快照（不含 CHANGELOG / docs / scripts / 任务分支），`v0.2.0` tag 指向真实完整历史
+- 按约定推送私有仓库 main 与公开发布仓库后，等待用户确认发布结果
+
+---
+
 ## 应用图标：更换为新鲸鱼 Logo（2026-08-04）
 
 **日期：** 2026-08-04
