@@ -4,6 +4,39 @@
 
 ---
 
+## 应用图标：更换为新鲸鱼 Logo（2026-08-04）
+
+**日期：** 2026-08-04
+
+### 交付内容
+
+- 用户提供的 `DeepTalk.png`（1254×1254，红/粉卡通鲸鱼 + Wi-Fi 弧线）原文件为纯绿背景（24bppRGB，无透明通道），已做色度键抠图并绿色去溢，生成透明版源图
+- 用 `npm run tauri icon` 重新生成 `src-tauri/icons/` 全套图标：`icon.ico` / `icon.icns` / `icon.png`、Windows Square 系列与 StoreLogo、iOS AppIcon、Android mipmap（替换原 M 图标）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| 透明源图生成 | PASS（82% 透明，四角 alpha=0，主体完整） |
+| `icon.png` 校验 | PASS（512×512，81% 透明，无绿边/白边，主体鲸鱼） |
+| `npm test -- --run` | PASS（9 文件 / 36 用例） |
+| `npx tsc --noEmit` | PASS |
+| `npm run build` | PASS |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS（125 通过 / 0 失败 / 3 忽略（模型依赖）） |
+| `scripts/verify-third-party.ps1` | PASS（26 条登记） |
+
+### 提交信息
+
+- 图标更换：`ae7aeb8`（`feat: replace app icons with whale logo`，分支 `feat/replace-app-logo`）
+
+### 说明
+
+- 原图 `C:\Users\17214\Downloads\DeepTalk.png` 未改动；透明处理版保存在本地 `.superpowers\branding\DeepTalk-logo-transparent.png`（gitignored，未入库）
+- 图标需重新运行或打包应用后生效（窗口图标、任务栏图标随 exe / 安装包更新）
+- 按约定推送分支后等待用户确认再合并 main
+
+---
+
 ## UI 重设计：晨光白 × 克制玻璃（2026-08-04）
 
 **日期：** 2026-08-04
