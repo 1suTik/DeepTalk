@@ -1,6 +1,6 @@
 [package]
 name = "meeting-ai-assistant"
-version = "0.1.0"
+version = "0.2.0"
 description = "Windows 实时会议 AI 辅助程序：本地语音转写、问题检测与流式建议答案"
 authors = ["1suTik <1721462252@qq.com>"]
 license = "MIT"

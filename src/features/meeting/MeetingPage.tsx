@@ -110,7 +110,11 @@ export function MeetingPage() {
           </button>
           <button
             type="button"
-            className="meeting-page__toggle"
+            className={
+              running
+                ? "meeting-page__toggle meeting-page__toggle--danger"
+                : "meeting-page__toggle meeting-page__toggle--primary"
+            }
             onClick={() => void (running ? handleStop() : handleStart())}
           >
             {running ? "停止会话" : "开始会话"}

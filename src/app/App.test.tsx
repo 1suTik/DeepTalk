@@ -36,6 +36,7 @@ describe("App (main window)", () => {
   it("shows meeting page and navigates to settings", async () => {
     render(<App />);
     expect(screen.getByTestId("app-shell")).toBeVisible();
+    expect(screen.getByTestId("mouse-glow")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "主界面" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     await waitFor(() => expect(screen.getByTestId("settings-page")).toBeVisible());
