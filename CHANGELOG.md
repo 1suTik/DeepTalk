@@ -4,6 +4,43 @@
 
 ---
 
+## UI 重设计：晨光白 × 克制玻璃（2026-08-04）
+
+**日期：** 2026-08-04
+
+### 交付内容
+
+- 主界面 / 设置页 / 置顶小窗统一改为「暖纸白 + 珊瑚红强调 + 克制玻璃」浅色主题，去除深蓝黑底与 indigo 紫渐变
+- `src/styles.css` 重写为设计令牌体系（背景氛围光晕、玻璃卡片、大圆角、柔和阴影、状态色）
+- 新增主窗口鼠标光斑组件 `MouseGlow`（rAF 节流跟随指针，极淡装饰，`pointer-events: none`），置顶小窗不启用
+- 克制动效：悬停上浮、按钮按压回弹、消息入场淡入、流式光标闪烁；`prefers-reduced-motion` 降级
+- 「开始会话」改为珊瑚红主按钮，「停止会话」改为危险态
+- `.superpowers/` 加入 `.gitignore`（规划期 mockup 产物不入库）
+- 修复既有门禁问题：`THIRD_PARTY_NOTICES.md` 恢复「依赖匹配」列并补 DefinitelyTyped 行，`scripts/verify-third-party.ps1` 恢复可用（26 条登记全部通过交叉校验）
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `npm test -- --run`（TDD：MouseGlow 红→绿） | PASS（9 文件 / 36 用例） |
+| `npx tsc --noEmit` | PASS |
+| `npm run build` | PASS（CSS 13.89 kB / JS 233.62 kB） |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS（125 通过 / 0 失败 / 3 忽略（模型依赖）） |
+| `scripts/verify-third-party.ps1` | PASS（26 条登记，全部直接依赖已注册） |
+
+### 提交信息
+
+- UI 重设计：`de99890`（`feat: redesign UI with warm paper glass theme`，分支 `feat/ui-redesign-glass-light`）
+- 第三方登记表修复：`2050615`（`docs: restore third-party notices schema for dependency audit`）
+
+### 说明
+
+- 纯 CSS 实现，未新增 npm / Cargo 依赖，未改 Rust 侧、事件契约、窗口配置与系统级透明度
+- 视觉验收（空态 / 会话中 / 设置页 / 小窗 / 动效 / 鼠标光斑）待用户在本机运行 `npm run tauri dev` 确认
+- 按约定推送分支后等待用户确认再合并 main
+
+---
+
 ## 环境迁移：构建工具链移至 G 盘（2026-08-03）
 
 **日期：** 2026-08-03
