@@ -42,7 +42,7 @@ Windows 实时对话 AI 辅助程序：本地完成中英语音转写，识别�
 
 ### 安装包（推荐）
 
-从 [Releases](https://github.com/1suTik/DeepTalk/releases) 下载 `DeepTalk_0.1.1_x64-setup.exe`，双击安装（当前用户安装，无需管理员权限）。
+从 [Releases](https://github.com/1suTik/DeepTalk/releases) 下载 `DeepTalk_0.2.0_x64-setup.exe`，双击安装（当前用户安装，无需管理员权限）。
 
 首次使用：
 
